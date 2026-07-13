@@ -61,7 +61,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   
-  const [tab, setTab] = useState<'posts' | 'social' | 'achievements' | 'stats' | 'launch'>('social');
+  const [tab, setTab] = useState<'posts' | 'social' | 'achievements' | 'stats' | 'launch' | 'security'>('social');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -84,6 +84,29 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
   const [testNotifBody, setTestNotifBody] = useState('Esta é uma notificação em segundo plano da sua rede soberana!');
   const [isScheduling, setIsScheduling] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
+
+  // Estados para Biometria
+  const [showBiometricSetup, setShowBiometricSetup] = useState(false);
+  const [biometricPinValue, setBiometricPinValue] = useState('');
+  const [biometricSetupError, setBiometricSetupError] = useState('');
+  const [biometricHardwareSupported, setBiometricHardwareSupported] = useState(false);
+  const [biometricStatusMsg, setBiometricStatusMsg] = useState('');
+  const [showDisableVerify, setShowDisableVerify] = useState(false);
+  const [verifyPinValue, setVerifyPinValue] = useState('');
+  const [verifyPinError, setVerifyPinError] = useState('');
+
+  useEffect(() => {
+    if (window.PublicKeyCredential) {
+      // Check if platform authenticator is available
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        .then(available => {
+          setBiometricHardwareSupported(available);
+        })
+        .catch(() => {
+          setBiometricHardwareSupported(false);
+        });
+    }
+  }, []);
 
   const loadSwState = async () => {
     const state = await SWManager.getState();
@@ -346,6 +369,174 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
     }
   };
 
+  const handleTogglePrivacySetting = (key: 'shareNameWithThirdParties' | 'shareEmailWithThirdParties' | 'shareLocationWithThirdParties' | 'shareFriendsWithThirdParties' | 'shareBioWithThirdParties' | 'permanentInvisibleMode') => {
+    if (!viewedUser) return;
+    const updatedUser: User = {
+      ...viewedUser,
+      privacy: {
+        ...viewedUser.privacy,
+        [key]: !viewedUser.privacy[key]
+      }
+    };
+    
+    if (key === 'permanentInvisibleMode') {
+      const newVal = !viewedUser.privacy.permanentInvisibleMode;
+      updatedUser.status = newVal ? UserStatus.OFFLINE : UserStatus.ONLINE;
+      updatedUser.privacy.incognitoMode = newVal;
+    }
+
+    UserDatabase.updateUser(updatedUser);
+    setViewedUser(updatedUser);
+    if (onUpdate) onUpdate();
+    if (navigator.vibrate) navigator.vibrate(15);
+  };
+
+  const handleToggleBiometricSwitch = async () => {
+    if (!viewedUser) return;
+    const isCurrentlyEnabled = viewedUser.privacy?.biometricLockEnabled ?? false;
+    
+    if (!isCurrentlyEnabled) {
+      // Abrir fluxo de ativação / Setup de PIN
+      setBiometricPinValue('');
+      setBiometricSetupError('');
+      setBiometricStatusMsg('');
+      setShowBiometricSetup(true);
+    } else {
+      // Solicitar o PIN cadastrado para desativar
+      setVerifyPinValue('');
+      setVerifyPinError('');
+      setShowDisableVerify(true);
+    }
+  };
+
+  const registerWebAuthnBiometrics = async (): Promise<boolean> => {
+    if (!window.PublicKeyCredential) return false;
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+      const userIdBytes = new Uint8Array(16);
+      window.crypto.getRandomValues(userIdBytes);
+
+      const credential = await navigator.credentials.create({
+        publicKey: {
+          challenge: challenge,
+          rp: { name: "Tribo S/A", id: window.location.hostname },
+          user: {
+            id: userIdBytes,
+            name: viewedUser?.username || "tribo_user",
+            displayName: viewedUser?.name || "Aliado da Tribo"
+          },
+          pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required"
+          },
+          timeout: 10000
+        }
+      });
+      return !!credential;
+    } catch (err) {
+      console.warn("Falha no WebAuthn real:", err);
+      return false;
+    }
+  };
+
+  const handleSaveBiometricSetup = async () => {
+    if (!viewedUser) return;
+    if (biometricPinValue.length < 4 || biometricPinValue.length > 6 || !/^\d+$/.test(biometricPinValue)) {
+      setBiometricSetupError('O PIN de backup deve conter entre 4 e 6 dígitos numéricos.');
+      return;
+    }
+
+    setBiometricStatusMsg('Iniciando integração de biometria de segurança...');
+    
+    // Tenta registrar WebAuthn biometrics real
+    let webAuthnSuccess = false;
+    if (biometricHardwareSupported) {
+      webAuthnSuccess = await registerWebAuthnBiometrics();
+    }
+
+    const updatedUser: User = {
+      ...viewedUser,
+      privacy: {
+        ...viewedUser.privacy,
+        biometricLockEnabled: true,
+        biometricPIN: biometricPinValue
+      }
+    };
+
+    UserDatabase.updateUser(updatedUser);
+    setViewedUser(updatedUser);
+    if (onUpdate) onUpdate();
+    setShowBiometricSetup(false);
+    
+    if (navigator.vibrate) navigator.vibrate([15, 15]);
+
+    if (webAuthnSuccess) {
+      alert("Autenticação Biométrica e PIN de Backup ativados com sucesso! Seu app está duplamente protegido.");
+    } else {
+      alert("Proteção de Segurança ativa! Como o ambiente de sandbox do navegador ou dispositivo limitou a leitura direta do sensor físico, usamos o PIN de Segurança de 4 dígitos para proteger todas as inicializações do seu aplicativo.");
+    }
+  };
+
+  const handleVerifyDisableBiometric = () => {
+    if (!viewedUser) return;
+    const correctPin = viewedUser.privacy?.biometricPIN;
+    if (verifyPinValue !== correctPin) {
+      setVerifyPinError('PIN de Segurança incorreto. Tente novamente.');
+      if (navigator.vibrate) navigator.vibrate([50, 50]);
+      return;
+    }
+
+    const updatedUser: User = {
+      ...viewedUser,
+      privacy: {
+        ...viewedUser.privacy,
+        biometricLockEnabled: false,
+        biometricPIN: undefined
+      }
+    };
+
+    UserDatabase.updateUser(updatedUser);
+    setViewedUser(updatedUser);
+    if (onUpdate) onUpdate();
+    setShowDisableVerify(false);
+    if (navigator.vibrate) navigator.vibrate(15);
+    alert("Camada de autenticação de segurança biométrica desativada com sucesso.");
+  };
+
+  const handleExportData = () => {
+    if (!viewedUser) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(viewedUser, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `tribo_dados_soberanos_${viewedUser.username}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    alert("Seu arquivo de soberania de dados (JSON) foi compilado localmente no seu dispositivo e baixado com sucesso! Nenhuma cópia foi retida.");
+  };
+
+  const handleRevokeAllApps = () => {
+    if (!viewedUser) return;
+    const updatedUser: User = {
+      ...viewedUser,
+      privacy: {
+        ...viewedUser.privacy,
+        shareNameWithThirdParties: false,
+        shareEmailWithThirdParties: false,
+        shareLocationWithThirdParties: false,
+        shareFriendsWithThirdParties: false,
+        shareBioWithThirdParties: false
+      }
+    };
+    UserDatabase.updateUser(updatedUser);
+    setViewedUser(updatedUser);
+    if (onUpdate) onUpdate();
+    alert("Todas as permissões de acesso de terceiros foram revogadas com sucesso!");
+    if (navigator.vibrate) navigator.vibrate([10, 10]);
+  };
+
   const level = viewedUser?.level || 1;
   const xpPercentage = viewedUser?.xp || 0;
   const reputation = viewedUser?.reputation || 0;
@@ -539,11 +730,14 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
       </div>
 
       <div className="space-y-8">
-         <div className="flex flex-wrap bg-zinc-900/50 p-2 rounded-[2.5rem] border border-zinc-800 w-fit mx-auto gap-1 shadow-inner">
+         <div className="flex flex-wrap bg-zinc-900/50 p-2 rounded-[2.5rem] border border-zinc-800 w-fit mx-auto gap-1 shadow-inner justify-center">
             <button onClick={() => setTab('social')} className={`px-10 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === 'social' ? 'bg-zinc-800 text-emerald-400 shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Sobre Mim</button>
             <button onClick={() => setTab('posts')} className={`px-10 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === 'posts' ? 'bg-zinc-800 text-emerald-400 shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Postagens</button>
             <button onClick={() => setTab('achievements')} className={`px-10 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === 'achievements' ? 'bg-zinc-800 text-emerald-400 shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Conquistas</button>
             <button onClick={() => setTab('stats')} className={`px-10 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === 'stats' ? 'bg-zinc-800 text-emerald-400 shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Hábito Digital</button>
+            {isOwnProfile && (
+              <button onClick={() => setTab('security')} className={`px-10 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === 'security' ? 'bg-zinc-800 text-emerald-400 shadow-xl' : 'text-zinc-600 hover:text-zinc-400'}`}>Segurança e Privacidade</button>
+            )}
             {currentUser.id === viewedUser?.id && (
               <button onClick={() => setTab('launch')} className={`px-10 py-4 rounded-3xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === 'launch' ? 'bg-emerald-500 text-black font-black shadow-lg shadow-emerald-500/20' : 'text-zinc-600 hover:text-zinc-400'}`}>Lançamento 🚀</button>
             )}
@@ -1160,6 +1354,335 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
                       <p className="text-[10px] font-medium text-zinc-500 leading-relaxed">{test.desc}</p>
                     </div>
                   ))}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {tab === 'security' && (
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Header Card */}
+              <div className="bg-gradient-to-br from-rose-500/10 via-zinc-900 to-zinc-950 border border-rose-500/15 rounded-[3rem] p-8 md:p-12 relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 p-8 text-rose-500/10 select-none pointer-events-none">
+                  <Shield size={120} className="stroke-[1]" />
+                </div>
+                <div className="relative z-10 max-w-2xl">
+                  <span className="px-4 py-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-2 mb-6">
+                    <Fingerprint size={10} className="animate-pulse" /> SOBERANIA DE PRIVACIDADE
+                  </span>
+                  <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-4 italic uppercase leading-none">Segurança & Privacidade</h2>
+                  <p className="text-zinc-400 font-medium text-sm leading-relaxed">
+                    Sua identidade digital na <span className="text-white font-bold">TRIBO</span> pertence exclusivamente a você. Controle quais dados você deseja expor para aplicações parceiras e gerencie suas diretrizes de invisibilidade permanente a qualquer momento.
+                  </p>
+                </div>
+              </div>
+
+              {/* Permanent Invisible Mode */}
+              <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-8 md:p-10 space-y-6 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-white/5">
+                  <div className="flex gap-4 items-start">
+                    <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20 text-rose-500 shrink-0">
+                      <EyeOff size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white tracking-tight">Modo Invisível Permanente</h3>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Congele sua presença online e seu sinal GPS</p>
+                    </div>
+                  </div>
+                  
+                  <div className="relative inline-flex items-center self-start sm:self-center">
+                    <input 
+                      id="toggle-permanent-invisible"
+                      type="checkbox" 
+                      checked={viewedUser.privacy?.permanentInvisibleMode || false} 
+                      onChange={() => handleTogglePrivacySetting('permanentInvisibleMode')}
+                      className="sr-only peer"
+                    />
+                    <div className="w-14 h-7 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-rose-500 cursor-pointer"></div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-zinc-400 font-medium leading-relaxed">
+                  Ao ativar o <span className="text-rose-400 font-bold">Modo Invisível Permanente</span>, seu perfil é configurado permanentemente como <span className="text-rose-400 font-bold">Offline</span> por padrão. Sua geolocalização e sua presença ativa no radar serão congeladas e ocultadas de todos os outros aliados, independentemente das configurações do menu flutuante. Você poderá navegar de forma anônima e invisível por toda a rede.
+                </p>
+              </div>
+
+              {/* Autenticação Biométrica de Segurança */}
+              <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-8 md:p-10 space-y-6 shadow-xl relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-white/5">
+                  <div className="flex gap-4 items-start">
+                    <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 shrink-0">
+                      <Fingerprint size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white tracking-tight">Proteção Biométrica / PIN</h3>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Exigir autenticação ao iniciar ou restaurar o aplicativo</p>
+                    </div>
+                  </div>
+                  
+                  <div className="relative inline-flex items-center self-start sm:self-center">
+                    <input 
+                      id="toggle-biometric-lock"
+                      type="checkbox" 
+                      checked={viewedUser.privacy?.biometricLockEnabled || false} 
+                      onChange={handleToggleBiometricSwitch}
+                      className="sr-only peer"
+                    />
+                    <div className="w-14 h-7 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 cursor-pointer"></div>
+                  </div>
+                </div>
+
+                <div className="text-xs text-zinc-400 font-medium leading-relaxed space-y-3">
+                  <p>
+                    Ative a proteção de acesso para blindar sua conta contra intromissões no mesmo dispositivo físico. Sempre que o aplicativo for aberto do zero ou recuperado do plano de fundo, um prompt de validação de <span className="text-emerald-400 font-bold">Leitura Biométrica (Digital/Facial)</span> ou <span className="text-emerald-400 font-bold">Código PIN</span> será exibido.
+                  </p>
+                  {viewedUser.privacy?.biometricLockEnabled && (
+                    <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-2xl text-emerald-400 text-[10px] font-black uppercase tracking-wider">
+                      <Shield size={12} className="text-emerald-400" /> Camada de Segurança Ativada com Sucesso
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal de Configuração de PIN / Biometria */}
+              {showBiometricSetup && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                  <div className="bg-zinc-950 border border-zinc-800 w-full max-w-md rounded-[3rem] p-8 md:p-10 space-y-6 shadow-2xl relative">
+                    <button 
+                      onClick={() => setShowBiometricSetup(false)}
+                      className="absolute top-6 right-6 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={20} />
+                    </button>
+
+                    <div className="text-center space-y-3">
+                      <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                        <Fingerprint size={32} className="animate-pulse" />
+                      </div>
+                      <h3 className="text-xl font-black text-white tracking-tight uppercase italic">Configurar Bloqueio</h3>
+                      <p className="text-xs text-zinc-400">Defina um código PIN numérico de segurança (4 a 6 dígitos) que servirá como backup para sua biometria.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-zinc-500 tracking-wider block mb-2">Digite o novo PIN de Segurança</label>
+                        <input 
+                          type="password"
+                          maxLength={6}
+                          placeholder="••••••"
+                          value={biometricPinValue}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setBiometricPinValue(val);
+                            setBiometricSetupError('');
+                          }}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-5 text-center text-2xl font-black tracking-[1em] text-emerald-400 focus:outline-none focus:border-emerald-500/50 transition-colors"
+                        />
+                      </div>
+
+                      {biometricSetupError && (
+                        <p className="text-rose-400 text-[10px] font-bold uppercase tracking-wider text-center">{biometricSetupError}</p>
+                      )}
+
+                      {biometricStatusMsg && (
+                        <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider text-center animate-pulse">{biometricStatusMsg}</p>
+                      )}
+
+                      <div className="flex gap-3 pt-2">
+                        <button 
+                          onClick={() => setShowBiometricSetup(false)}
+                          className="flex-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 font-bold py-4 rounded-2xl text-xs uppercase tracking-widest transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          onClick={handleSaveBiometricSetup}
+                          className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-2xl text-xs uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-emerald-500/10"
+                        >
+                          Ativar Proteção
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal de Desativação / Confirmação por PIN */}
+              {showDisableVerify && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                  <div className="bg-zinc-950 border border-zinc-800 w-full max-w-md rounded-[3rem] p-8 md:p-10 space-y-6 shadow-2xl relative">
+                    <button 
+                      onClick={() => setShowDisableVerify(false)}
+                      className="absolute top-6 right-6 text-zinc-500 hover:text-white transition-colors cursor-pointer"
+                    >
+                      <X size={20} />
+                    </button>
+
+                    <div className="text-center space-y-3">
+                      <div className="w-16 h-16 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                        <Shield size={32} />
+                      </div>
+                      <h3 className="text-xl font-black text-white tracking-tight uppercase italic">Desativar Proteção</h3>
+                      <p className="text-xs text-zinc-400">Para desativar a biometria e o PIN de segurança, confirme digitando o seu PIN cadastrado.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[9px] font-black uppercase text-zinc-500 tracking-wider block mb-2">Digite o PIN cadastrado</label>
+                        <input 
+                          type="password"
+                          maxLength={6}
+                          placeholder="••••"
+                          value={verifyPinValue}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setVerifyPinValue(val);
+                            setVerifyPinError('');
+                          }}
+                          className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-5 text-center text-2xl font-black tracking-[1em] text-rose-400 focus:outline-none focus:border-rose-500/50 transition-colors"
+                        />
+                      </div>
+
+                      {verifyPinError && (
+                        <p className="text-rose-400 text-[10px] font-bold uppercase tracking-wider text-center">{verifyPinError}</p>
+                      )}
+
+                      <div className="flex gap-3 pt-2">
+                        <button 
+                          onClick={() => setShowDisableVerify(false)}
+                          className="flex-1 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 font-bold py-4 rounded-2xl text-xs uppercase tracking-widest transition-all cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          onClick={handleVerifyDisableBiometric}
+                          className="flex-1 bg-rose-500 hover:bg-rose-400 text-black font-black py-4 rounded-2xl text-xs uppercase tracking-widest transition-all cursor-pointer shadow-lg shadow-rose-500/10"
+                        >
+                          Confirmar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Third-Party App Permissions Manager */}
+              <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-8 md:p-10 space-y-8 shadow-xl">
+                <div>
+                  <h3 className="text-xl font-black text-white tracking-tighter italic uppercase mb-2 flex items-center gap-2">
+                    <Share2 size={18} className="text-emerald-500" /> Compartilhamento com Aplicativos de Terceiros
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                    Abaixo, configure detalhadamente quais dados pessoais os aplicativos externos integrados à rede (Web3 dApps, jogos agrícolas, feeds alternativos, portais de dVagas) estão autorizados a ler sob sua custódia soberana.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {[
+                    {
+                      key: 'shareNameWithThirdParties' as const,
+                      title: 'Nome de Exibição Sóbrio',
+                      desc: 'Permitir que apps externos leiam seu nome cadastrado. Se desativado, apenas seu @username será exposto de forma pseudônima.',
+                      icon: UserIcon,
+                      color: 'text-blue-400',
+                      bg: 'bg-blue-500/5 border-blue-500/10'
+                    },
+                    {
+                      key: 'shareEmailWithThirdParties' as const,
+                      title: 'E-mail de Cadastro',
+                      desc: 'Permitir que aplicativos parceiros verifiquem seu endereço de e-mail registrado para comunicação direta e notificações unificadas.',
+                      icon: Globe,
+                      color: 'text-emerald-400',
+                      bg: 'bg-emerald-500/5 border-emerald-500/10'
+                    },
+                    {
+                      key: 'shareLocationWithThirdParties' as const,
+                      title: 'Sinal de Geolocalização',
+                      desc: 'Permitir que mapas terceiros, rotas de entrega e dApps de mercado físico leiam suas coordenadas GPS quando você compartilhá-las.',
+                      icon: MapPin,
+                      color: 'text-amber-400',
+                      bg: 'bg-amber-500/5 border-amber-500/10'
+                    },
+                    {
+                      key: 'shareFriendsWithThirdParties' as const,
+                      title: 'Teia de Conexões (Amigos)',
+                      desc: 'Permitir que dApps de terceiros leiam a lista dos seus aliados conectados para criar pontes de contatos sociais confiáveis.',
+                      icon: Users,
+                      color: 'text-purple-400',
+                      bg: 'bg-purple-500/5 border-purple-500/10'
+                    },
+                    {
+                      key: 'shareBioWithThirdParties' as const,
+                      title: 'Biografia & Atividades Profes.',
+                      desc: 'Permitir que motores de busca de talentos, dApps profissionais e de comércio acessem sua bio, ocupação e interesses.',
+                      icon: Briefcase,
+                      color: 'text-teal-400',
+                      bg: 'bg-teal-500/5 border-teal-500/10'
+                    }
+                  ].map((perm) => {
+                    const PermIcon = perm.icon;
+                    const isChecked = viewedUser.privacy?.[perm.key] ?? false;
+                    return (
+                      <div key={perm.key} className="p-6 bg-black/20 border border-white/5 rounded-[2rem] space-y-4 flex flex-col justify-between hover:border-white/10 transition-colors duration-300">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`p-2.5 bg-zinc-950 rounded-xl border ${perm.bg} ${perm.color}`}>
+                              <PermIcon size={16} />
+                            </div>
+                            <h4 className="font-extrabold text-sm text-white tracking-tight">{perm.title}</h4>
+                          </div>
+                          <p className="text-[10px] font-medium text-zinc-500 leading-relaxed">{perm.desc}</p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                          <span className={`text-[9px] font-black uppercase tracking-wider ${isChecked ? 'text-emerald-400' : 'text-zinc-600'}`}>
+                            {isChecked ? 'Autorizado ✓' : 'Revogado ✗'}
+                          </span>
+                          <div className="relative inline-flex items-center">
+                            <input 
+                              id={`toggle-${perm.key}`}
+                              type="checkbox" 
+                              checked={isChecked} 
+                              onChange={() => handleTogglePrivacySetting(perm.key)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-10 h-5 bg-zinc-850 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 cursor-pointer"></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Data Sovereignty actions */}
+              <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-8 md:p-10 space-y-6 shadow-xl relative overflow-hidden group">
+                <div>
+                  <h3 className="text-xl font-black text-white tracking-tighter italic uppercase mb-2 flex items-center gap-2">
+                    <Database size={18} className="text-rose-500" /> Saneamento & Portabilidade Total de Dados
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                    Em conformidade estrita com o Manifesto Tribo 2026, você pode exportar todos os seus dados locais ou revogar instantaneamente todas as conexões terceiras com um único toque.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <button
+                    onClick={handleExportData}
+                    className="w-full bg-zinc-950 hover:bg-zinc-850 border border-white/5 text-zinc-300 font-black py-5 px-6 rounded-[2rem] text-xs uppercase tracking-widest cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-3"
+                  >
+                    <RefreshCcw size={16} className="text-emerald-400" />
+                    Exportar Meus Dados (JSON)
+                  </button>
+
+                  <button
+                    onClick={handleRevokeAllApps}
+                    className="w-full bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-black border border-rose-500/20 font-black py-5 px-6 rounded-[2rem] text-xs uppercase tracking-widest cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-3"
+                  >
+                    <Trash2 size={16} />
+                    Revogar Acesso de Todos os Apps
+                  </button>
                 </div>
               </div>
 

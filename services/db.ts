@@ -833,5 +833,58 @@ export class UserDatabase {
     localStorage.setItem('tribo_seeded', 'true');
     localStorage.setItem('tribo_v5_dynamic_founder_clean', 'true');
   }
+
+  static bootstrapState(centralState: any) {
+    if (!centralState) return;
+
+    const mergeArrays = (localKey: string, serverArr: any[]) => {
+      if (!serverArr || !Array.isArray(serverArr)) return;
+      const localDataRaw = localStorage.getItem(localKey);
+      const localArr: any[] = localDataRaw ? JSON.parse(localDataRaw) : [];
+      
+      const map = new Map();
+      // Colocar itens locais primeiro
+      localArr.forEach(item => {
+        if (item && item.id) map.set(item.id, item);
+      });
+
+      // Mesclar itens do servidor
+      serverArr.forEach(item => {
+        if (item && item.id) {
+          if (!map.has(item.id)) {
+            map.set(item.id, item);
+          } else {
+            const existing = map.get(item.id);
+            const getTs = (x: any) => {
+              if (!x) return 0;
+              const val = x.ultima_atividade || x.timestamp || x.createdAt || x.data_envio || x.date || 0;
+              if (typeof val === 'number') return val;
+              if (typeof val === 'string') {
+                const parsed = Date.parse(val);
+                return isNaN(parsed) ? 0 : parsed;
+              }
+              return 0;
+            };
+            const existingTime = getTs(existing);
+            const incomingTime = getTs(item);
+            if (incomingTime > existingTime) {
+              map.set(item.id, { ...existing, ...item });
+            }
+          }
+        }
+      });
+
+      localStorage.setItem(localKey, JSON.stringify(Array.from(map.values())));
+    };
+
+    mergeArrays('tribo_users_v4', centralState.users);
+    mergeArrays('tribo_posts_v4', centralState.posts);
+    mergeArrays('tribo_stories_v4', centralState.stories);
+    mergeArrays('tribo_msgs_v4', centralState.messages);
+    mergeArrays('tribo_convs_v4', centralState.conversations);
+    mergeArrays('tribo_products_v4', centralState.products);
+    mergeArrays('tribo_communities_v4', centralState.communities);
+    mergeArrays('tribo_shared_locations_v4', centralState.sharedLocations);
+  }
 }
 

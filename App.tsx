@@ -26,6 +26,7 @@ import AuthView from './views/AuthView';
 import UniversoView from './views/UniversoView';
 import FriendsView from './views/FriendsView';
 import { OnboardingTour } from './src/components/OnboardingTour';
+import { BiometricLockScreen } from './src/components/BiometricLockScreen';
 import { IdentityType, User, AppNotification } from './types';
 import { UserDatabase } from './services/db';
 import { SWManager } from './services/swManager';
@@ -161,9 +162,33 @@ const BottomNav: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tribo_logged_user_id');
+      if (saved) {
+        return UserDatabase.findById(saved) || null;
+      }
+    }
+    return null;
+  });
   const [isIncognito, setIsIncognito] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const [isBiometricLocked, setIsBiometricLocked] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tribo_logged_user_id');
+      if (saved) {
+        const u = UserDatabase.findById(saved);
+        return u?.privacy?.biometricLockEnabled || false;
+      }
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (!currentUser) {
+      setIsBiometricLocked(false);
+    }
+  }, [currentUser]);
 
   const refreshUser = useCallback(() => {
     if (currentUser) {
@@ -174,6 +199,37 @@ const App: React.FC = () => {
           setCurrentUser(freshUser);
         }
       }
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    // Sincronização inicial (bootstrap) da rede no carregamento do app
+    fetch('/api/bootstrap')
+      .then(res => {
+        if (!res.ok) throw new Error('Falha ao conectar ao servidor central');
+        return res.json();
+      })
+      .then(data => {
+        UserDatabase.bootstrapState(data);
+        // Atualiza os dados do usuário caso já estivesse logado
+        const savedId = localStorage.getItem('tribo_logged_user_id');
+        if (savedId) {
+          const fresh = UserDatabase.findById(savedId);
+          if (fresh) {
+            setCurrentUser(fresh);
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('[TRIBO NETWORK] Modo offline ativo:', err.message);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('tribo_logged_user_id', currentUser.id);
+    } else {
+      localStorage.removeItem('tribo_logged_user_id');
     }
   }, [currentUser]);
 
@@ -239,6 +295,10 @@ const App: React.FC = () => {
   const renderContent = () => {
     if (!currentUser) {
       return <AuthView onLogin={setCurrentUser} />;
+    }
+
+    if (isBiometricLocked) {
+      return <BiometricLockScreen currentUser={currentUser} onUnlock={() => setIsBiometricLocked(false)} />;
     }
 
     return (

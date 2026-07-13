@@ -53,6 +53,14 @@ export interface User {
     showOnlineStatus: boolean;
     incognitoMode?: boolean;
     blockedKeywords?: string[];
+    shareNameWithThirdParties?: boolean;
+    shareEmailWithThirdParties?: boolean;
+    shareLocationWithThirdParties?: boolean;
+    shareFriendsWithThirdParties?: boolean;
+    shareBioWithThirdParties?: boolean;
+    permanentInvisibleMode?: boolean;
+    biometricLockEnabled?: boolean;
+    biometricPIN?: string;
   };
   pushNotificationsEnabled?: boolean;
   status: UserStatus;

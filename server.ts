@@ -53,6 +53,11 @@ async function startServer() {
     });
   });
 
+  // Endpoint de Bootstrap para sincronização inicial sem login
+  app.get("/api/bootstrap", (req, res) => {
+    res.json(centralDb);
+  });
+
   // Criar o servidor HTTP
   const server = http.createServer(app);
 
@@ -60,6 +65,18 @@ async function startServer() {
   const wss = new WebSocketServer({ server, path: "/ws" });
 
   // Funções Auxiliares para Sincronismo & Resolução de Conflitos
+  function getTimestamp(item: any): number {
+    if (!item) return 0;
+    const val = item.ultima_atividade || item.timestamp || item.createdAt || item.data_envio || item.date || 0;
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+      const parsed = Date.parse(val);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  }
+
   function mergeArraysById(serverArr: any[], clientArr: any[]): any[] {
     const map = new Map();
     // Inserir primeiro os do servidor
@@ -72,10 +89,10 @@ async function startServer() {
         if (!map.has(item.id)) {
           map.set(item.id, item);
         } else {
-          // Resolução simples de conflitos (última atualização ganha com base em carimbo de data/hora se existir)
+          // Resolução robusta de conflitos (última atualização ganha com base em carimbo de data/hora se existir)
           const existing = map.get(item.id);
-          const existingTime = existing.timestamp || existing.createdAt || existing.data_envio || 0;
-          const incomingTime = item.timestamp || item.createdAt || item.data_envio || 0;
+          const existingTime = getTimestamp(existing);
+          const incomingTime = getTimestamp(item);
           if (incomingTime > existingTime) {
             map.set(item.id, { ...existing, ...item });
           }
