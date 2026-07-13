@@ -1,0 +1,9 @@
+{
+  "name": "TRIBO - Rede Social Livre",
+  "description": "Uma rede social brasileira focada em liberdade, privacidade e comunidades reais. Fique no controle total dos seus dados e conexões.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
