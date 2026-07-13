@@ -26,6 +26,8 @@ import UniversoView from './views/UniversoView';
 import FriendsView from './views/FriendsView';
 import { IdentityType, User, AppNotification } from './types';
 import { UserDatabase } from './services/db';
+import { SWManager } from './services/swManager';
+import { SyncClient } from './services/syncClient';
 
 const TopHeader: React.FC<{ currentUser: User; isIncognito: boolean; onToggleIncognito: () => void }> = ({ currentUser, isIncognito, onToggleIncognito }) => {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -158,7 +160,24 @@ const App: React.FC = () => {
       const interval = setInterval(refreshUser, 3000);
       return () => clearInterval(interval);
     }
-  }, [refreshUser]);
+  }, [currentUser, refreshUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      // Conecta ao servidor central de internet
+      SyncClient.connect(currentUser.id);
+
+      // Assina atualizações em tempo real recebidas de outros aparelhos
+      const unsubscribe = SyncClient.addUpdateCallback(() => {
+        refreshUser();
+      });
+
+      return () => {
+        unsubscribe();
+        SyncClient.disconnect();
+      };
+    }
+  }, [currentUser, refreshUser]);
 
   useEffect(() => {
     if (currentUser?.themePreference) {
@@ -166,11 +185,13 @@ const App: React.FC = () => {
       document.documentElement.classList.add(currentUser.themePreference);
     }
     
-    // Solicitar permissão de notificação se o usuário permitir nas configurações
-    if (currentUser?.pushNotificationsEnabled && "Notification" in window) {
-      if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-        Notification.requestPermission();
-      }
+    // Registrar o Service Worker e solicitar permissão se ativado
+    if (currentUser?.pushNotificationsEnabled && SWManager.isSupported()) {
+      SWManager.register().then(() => {
+        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+          SWManager.requestPermission();
+        }
+      });
     }
   }, [currentUser?.themePreference, currentUser?.pushNotificationsEnabled]);
 

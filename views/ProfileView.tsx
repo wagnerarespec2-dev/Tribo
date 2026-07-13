@@ -48,6 +48,7 @@ import {
   Database
 } from 'lucide-react';
 import { UserDatabase } from '../services/db';
+import { SWManager, ServiceWorkerState } from '../services/swManager';
 import { FeedPost } from '../src/components/FeedPost';
 import { ConnectionStats } from '../src/components/ConnectionStats';
 
@@ -75,6 +76,77 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
   // Estado para filtragem de palavras-chave / temas
   const [newKeyword, setNewKeyword] = useState('');
   const [blockedKeywords, setBlockedKeywords] = useState<string[]>([]);
+
+  // Estados para Service Worker e Notificações Push
+  const [swState, setSwState] = useState<ServiceWorkerState | null>(null);
+  const [testNotifDelay, setTestNotifDelay] = useState(5);
+  const [testNotifTitle, setTestNotifTitle] = useState('Alerta da Tribo! 🚀');
+  const [testNotifBody, setTestNotifBody] = useState('Esta é uma notificação em segundo plano da sua rede soberana!');
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const loadSwState = async () => {
+    const state = await SWManager.getState();
+    setSwState(state);
+  };
+
+  useEffect(() => {
+    loadSwState();
+  }, []);
+
+  const handleRequestSWPermission = async () => {
+    await SWManager.requestPermission();
+    await loadSwState();
+  };
+
+  const handleRegisterSW = async () => {
+    await SWManager.register();
+    await loadSwState();
+  };
+
+  const handleUnregisterSW = async () => {
+    await SWManager.unregister();
+    await loadSwState();
+  };
+
+  const handleSubscribePush = async () => {
+    setIsSubscribing(true);
+    try {
+      const sub = await SWManager.subscribeToPush();
+      if (sub) {
+        alert("Subscrição push registrada com sucesso no navegador!");
+      } else {
+        alert("Falha ou permissão negada ao registrar subscrição push.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao subscrever.");
+    } finally {
+      setIsSubscribing(false);
+      await loadSwState();
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    setIsScheduling(true);
+    try {
+      const success = await SWManager.scheduleBackgroundNotification(
+        testNotifTitle,
+        testNotifBody,
+        testNotifDelay * 1000
+      );
+      if (success) {
+        alert(`Agendado! Bloqueie o celular ou minimize a aba agora. Em ${testNotifDelay} segundos você receberá o alerta direto em segundo plano!`);
+      } else {
+        alert("Verifique se as notificações estão permitidas e se o Service Worker está ativo.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao agendar.");
+    } finally {
+      setIsScheduling(false);
+    }
+  };
 
   useEffect(() => {
     if (viewedUser && viewedUser.privacy) {
@@ -330,7 +402,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
           {editData.coverImage || viewedUser.coverImage ? (
             <img src={editData.coverImage || viewedUser.coverImage} className="w-full h-full object-cover" />
           ) : (
-            <div className={`w-full h-full bg-gradient-to-br ${viewedUser.id === 'wagner-001' ? 'from-emerald-900/40 to-emerald-950' : 'from-zinc-900/40 to-zinc-950'} opacity-40 blur-sm`}></div>
+            <div className={`w-full h-full bg-gradient-to-br ${viewedUser.isFounder ? 'from-emerald-900/40 to-emerald-950' : 'from-zinc-900/40 to-zinc-950'} opacity-40 blur-sm`}></div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent"></div>
           
@@ -711,6 +783,158 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
                     </div>
                   </div>
                 )}
+
+                {isOwnProfile && (
+                  <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3.5rem] p-10 space-y-8 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-500">
+                        <BellRing size={24} />
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-black text-white tracking-tighter italic">Notificações Push & Service Worker</h4>
+                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Controle a integração de segundo plano e recepção de alertas do sistema</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Painel de Status */}
+                      <div className="p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
+                        <h5 className="text-xs font-black uppercase tracking-wider text-zinc-400">Status do Navegador</h5>
+                        
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-500 font-bold">Suporte do Sistema:</span>
+                            {swState?.isSupported ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[9px] uppercase">Disponível</span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 font-black text-[9px] uppercase">Indisponível</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-500 font-bold">Service Worker:</span>
+                            {swState?.isRegistered ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[9px] uppercase">Ativo & Registrado</span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 font-black text-[9px] uppercase">Inativo</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-500 font-bold">Permissão de Alertas:</span>
+                            {swState?.permission === 'granted' ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[9px] uppercase">Permitido</span>
+                            ) : swState?.permission === 'denied' ? (
+                              <span className="px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 font-black text-[9px] uppercase">Negado</span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-zinc-800 border border-white/5 text-zinc-400 font-black text-[9px] uppercase">Padrão (Perguntar)</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-zinc-500 font-bold">Inscrição Push:</span>
+                            {swState?.subscription ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[9px] uppercase">Conectado</span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full bg-zinc-800 border border-white/5 text-zinc-400 font-black text-[9px] uppercase">Desconectado</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-4 flex flex-wrap gap-2">
+                          {!swState?.isRegistered ? (
+                            <button
+                              onClick={handleRegisterSW}
+                              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-[9px] uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              Registrar SW
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleUnregisterSW}
+                              className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-rose-400 border border-rose-500/10 font-black text-[9px] uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              Remover SW
+                            </button>
+                          )}
+
+                          {swState?.permission !== 'granted' && (
+                            <button
+                              onClick={handleRequestSWPermission}
+                              className="px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-black text-[9px] uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              Pedir Permissão
+                            </button>
+                          )}
+
+                          {!swState?.subscription && swState?.isRegistered && (
+                            <button
+                              onClick={handleSubscribePush}
+                              disabled={isSubscribing}
+                              className="px-4 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 font-black text-[9px] uppercase tracking-widest rounded-xl transition-all disabled:opacity-50"
+                            >
+                              {isSubscribing ? 'Inscrevendo...' : 'Inscrever Push'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Simulador de Segundo Plano */}
+                      <div className="p-6 bg-black/40 border border-white/5 rounded-3xl space-y-4">
+                        <h5 className="text-xs font-black uppercase tracking-wider text-zinc-400">Simulador de Alertas em 2º Plano</h5>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-[8px] font-black uppercase tracking-wider text-zinc-600 block mb-1">Título</label>
+                            <input
+                              type="text"
+                              value={testNotifTitle}
+                              onChange={(e) => setTestNotifTitle(e.target.value)}
+                              className="w-full bg-zinc-950/80 border border-white/5 rounded-xl px-4 py-2 text-xs font-black text-white outline-none focus:border-emerald-500/40"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[8px] font-black uppercase tracking-wider text-zinc-600 block mb-1">Conteúdo do Alerta</label>
+                            <input
+                              type="text"
+                              value={testNotifBody}
+                              onChange={(e) => setTestNotifBody(e.target.value)}
+                              className="w-full bg-zinc-950/80 border border-white/5 rounded-xl px-4 py-2 text-xs font-black text-white outline-none focus:border-emerald-500/40"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-[8px] font-black uppercase tracking-wider text-zinc-600 block mb-1">Delay (segundos)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="60"
+                                value={testNotifDelay}
+                                onChange={(e) => setTestNotifDelay(parseInt(e.target.value) || 5)}
+                                className="w-full bg-zinc-950/80 border border-white/5 rounded-xl px-4 py-2 text-xs font-black text-white outline-none focus:border-emerald-500/40"
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <button
+                                onClick={handleSendTestNotification}
+                                disabled={isScheduling || !swState?.isRegistered}
+                                className="w-full px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-[9px] uppercase tracking-widest rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {isScheduling ? 'Agendando...' : 'Agendar Teste'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-[9px] font-black uppercase text-zinc-600 leading-tight">
+                          💡 <span className="text-emerald-500/80">Como testar:</span> Altere o delay para 5s, clique em agendar, minimize imediatamente o navegador ou bloqueie a tela do celular e aguarde a notificação chegar!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="space-y-6">
@@ -819,7 +1043,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
 
                   <div className="space-y-5">
                     {[
-                      { name: 'Controle de Usuários', status: 'Wagner Criador Ativo', badge: '100% OK', icon: Fingerprint, color: 'text-emerald-500', desc: 'Identidade soberana validada.' },
+                      { name: 'Controle de Usuários', status: `${UserDatabase.getFounder()?.name || 'Administrador'} Criador Ativo`, badge: '100% OK', icon: Fingerprint, color: 'text-emerald-500', desc: 'Identidade soberana validada.' },
                       { name: 'Rede de Comunidades', status: 'Comunidades Inicializadas', badge: `${UserDatabase.getCommunities().length} Ativas`, icon: Users, color: 'text-teal-400', desc: 'Sintropias virtuais online.' },
                       { name: 'Feed e Discussões', status: 'Banco de Postagens Pronto', badge: `${UserDatabase.getPosts().length} Posts`, icon: MessageCircle, color: 'text-indigo-400', desc: 'Feed descentralizado operacional.' },
                       { name: 'Status Temporários (24h)', status: 'Stories Mídia Criados', badge: `${UserDatabase.getStories().length} Status`, icon: Camera, color: 'text-amber-400', desc: 'Estruturação de expiração testada.' },
@@ -850,30 +1074,35 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
                       <Zap size={14} className="text-rose-500" /> Saneamento Geral
                     </h3>
                     <p className="text-xs font-medium text-zinc-500 leading-relaxed mb-6">
-                      Se você encontrar quaisquer inconsistências durante seus testes ou quiser iniciar os testes com as sementes perfeitamente limpas, use a ação nuclear abaixo. Ela apagará todas as modificações temporárias do navegador e re-seederá a TRIBO imediatamente com dados limpos de demonstração de lançamento.
+                      Se você encontrar quaisquer inconsistências durante seus testes ou quiser iniciar os testes com as sementes perfeitamente limpas, use a ação nuclear abaixo. Ela apagará todas as modificações temporárias do navegador e redefinirá a TRIBO imediatamente para o estado limpo inicial.
                     </p>
                   </div>
 
                   <div className="space-y-4">
                     <button
                       onClick={() => {
-                        if (window.confirm("Nuclear Alert: Tem certeza de que quer limpar TODO o banco de dados local do app? Todas as postagens, transações, chats e usuários criados (exceto o soberano criador Wagner) serão zerados.")) {
+                        if (window.confirm("Nuclear Alert: Tem certeza de que quer limpar TODO o banco de dados local do app? Todas as postagens, transações, chats e usuários criados serão zerados.")) {
                           UserDatabase.wipeAllData();
-                          alert("Banco de dados local limpo com sucesso! A TRIBO foi re-seedada com os recursos e aliadas de demonstração originais do criador.");
+                          alert("Banco de dados local limpo com sucesso! A TRIBO está totalmente limpa e pronta para receber o cadastro do primeiro usuário (Fundador/Admin).");
                           window.location.reload();
                         }
                       }}
                       className="w-full bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-black border border-rose-500/20 font-black py-5 px-6 rounded-[2rem] text-xs uppercase tracking-widest cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-3 shadow-lg hover:shadow-rose-500/10"
                     >
                       <Trash2 size={16} />
-                      Apagar e Re-semear tudo (Reset Geral)
+                      Apagar tudo (Reset Geral)
                     </button>
 
                     <button
                       onClick={() => {
-                        const requestSent = UserDatabase.sendFriendRequest('wagner-001', currentUser.id);
+                        const founder = UserDatabase.getFounder();
+                        if (!founder) {
+                          alert("Nenhum criador/fundador foi cadastrado ainda.");
+                          return;
+                        }
+                        const requestSent = UserDatabase.sendFriendRequest(founder.id, currentUser.id);
                         if (requestSent) {
-                          alert("Sucesso! Um convite de conexão do criador Wagner foi enviado para você. Verifique sua aba de Notificações!");
+                          alert(`Sucesso! Um convite de conexão do criador ${founder.name} foi enviado para você. Verifique sua aba de Notificações!`);
                           if (onUpdate) onUpdate();
                         } else {
                           alert("A solicitação de amizade já está ativa ou vocês já são aliados de rede.");
@@ -887,10 +1116,11 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
                     
                     <button
                       onClick={() => {
+                        const founder = UserDatabase.getFounder();
                         const systemNotif = {
                           id: Math.random().toString(36).substr(2, 9),
-                          message: "Lançamento TRIBO v4! Seu aplicativo e conexões locais estão 100% íntegros e criptografados no cliente.",
-                          senderAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
+                          message: "Lançamento TRIBO! Seu aplicativo e conexões locais estão 100% íntegros e criptografados no cliente.",
+                          senderAvatar: founder?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=founder',
                           timestamp: 'Agora mesmo',
                           read: false
                         };

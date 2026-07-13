@@ -63,6 +63,7 @@ export interface User {
   createdAt?: string;
   themePreference?: 'dark' | 'light' | 'nostalgia';
   animatedAvatar?: boolean;
+  isFounder?: boolean;
 }
 
 export type PlotStatus = 'locked' | 'empty' | 'planted' | 'growing' | 'ready';

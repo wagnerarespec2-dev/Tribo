@@ -13,74 +13,26 @@ const PRODUCTS_KEY = 'tribo_products_v4';
 const COMMUNITIES_KEY = 'tribo_communities_v4';
 const SHARED_LOCATIONS_KEY = 'tribo_shared_locations_v4';
 
+if (typeof window !== 'undefined' && !localStorage.getItem('tribo_v5_dynamic_founder_clean')) {
+  localStorage.clear();
+  localStorage.setItem('tribo_seeded', 'true');
+  localStorage.setItem('tribo_v5_dynamic_founder_clean', 'true');
+}
+
 
 export class UserDatabase {
   private static isSeeding = false;
+  static onMutation?: (collection: string, item: any, action: 'create' | 'update' | 'delete') => void;
+  static onDM?: (recipientId: string, message: any, conversation: any) => void;
 
   static getUsers(): User[] {
-    if (!this.isSeeding && !localStorage.getItem('tribo_seeded')) {
-      this.isSeeding = true;
-      localStorage.setItem('tribo_seeded', 'true');
-      try {
-        this.seedDatabase();
-      } catch (e) {
-        console.error("Erro no auto-seeding:", e);
-      } finally {
-        this.isSeeding = false;
-      }
-    }
-
     const data = localStorage.getItem(USERS_KEY);
-    let users: User[] = data ? JSON.parse(data) : [];
-    
-    // Garantir existência e integridade do Wagner (Criador)
-    const wagnerId = 'wagner-001';
-    const wagnerIndex = users.findIndex(u => u.id === wagnerId || u.username === 'Wagner');
-    
-    const wagnerTemplate: User = {
-      id: wagnerId,
-      name: 'Wagner Alves de Lima',
-      username: 'Wagner',
-      password: 'wagner41',
-      email: 'wagner@tribo.com',
-      age: 35,
-      birthDate: '1989-01-01',
-      gender: 'Masculino',
-      identityType: IdentityType.REAL,
-      reputation: 10000,
-      level: 99,
-      xp: 999,
-      verified: true,
-      plan: UserPlan.PREMIUM,
-      bio: 'Criador & CEO da TRIBO. Liderando a revolução da soberania digital e liberdade de expressão.',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
-      location: 'São Paulo, BR',
-      relationship: 'Soberano(a)',
-      education: 'Soberano do Conhecimento',
-      occupation: 'Criador da Tribo',
-      friends: users[wagnerIndex]?.friends || [],
-      bookmarks: users[wagnerIndex]?.bookmarks || [],
-      joinedCommunities: users[wagnerIndex]?.joinedCommunities || [],
-      friendRequests: users[wagnerIndex]?.friendRequests || [],
-      wishlist: users[wagnerIndex]?.wishlist || [],
-      privacy: { isPublic: true, showLocation: true, allowStrangersMsg: true, showOnlineStatus: true, incognitoMode: false },
-      pushNotificationsEnabled: true,
-      status: UserStatus.ONLINE,
-      statusPhrase: 'Construindo o futuro da liberdade.',
-      ultima_atividade: Date.now(),
-      themePreference: 'dark',
-      animatedAvatar: true
-    };
+    return data ? JSON.parse(data) : [];
+  }
 
-    if (wagnerIndex === -1) {
-      users.push(wagnerTemplate);
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    } else if (users[wagnerIndex].password !== 'wagner41') {
-      users[wagnerIndex] = { ...users[wagnerIndex], ...wagnerTemplate, friends: users[wagnerIndex].friends };
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    }
-    
-    return users;
+  static getFounder(): User | undefined {
+    const users = this.getUsers();
+    return users.find(u => u.isFounder) || users[0];
   }
 
   static findById(id: string): User | undefined {
@@ -109,6 +61,8 @@ export class UserDatabase {
 
   static saveUser(userData: Partial<User>): User {
     const users = this.getUsers();
+    const isFirstUser = users.length === 0;
+
     const newUser: User = {
       id: Math.random().toString(36).substr(2, 9),
       name: userData.name || '',
@@ -119,15 +73,15 @@ export class UserDatabase {
       birthDate: userData.birthDate || '',
       gender: userData.gender as any,
       identityType: userData.identityType || IdentityType.REAL,
-      reputation: 0,
-      level: 1,
-      xp: 0,
-      verified: false,
-      plan: UserPlan.FREE,
-      bio: userData.bio || 'Membro da TRIBO.',
+      reputation: isFirstUser ? 10000 : 0,
+      level: isFirstUser ? 99 : 1,
+      xp: isFirstUser ? 999 : 0,
+      verified: isFirstUser ? true : false,
+      plan: isFirstUser ? UserPlan.PREMIUM : UserPlan.FREE,
+      bio: userData.bio || (isFirstUser ? 'Fundador & Administrador da TRIBO.' : 'Membro da TRIBO.'),
       avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.username || 'default'}`,
       location: userData.location || 'Brasil',
-      friends: ['wagner-001'], // Wagner é o primeiro aliado de todos
+      friends: [],
       bookmarks: [],
       joinedCommunities: [],
       friendRequests: [],
@@ -136,46 +90,151 @@ export class UserDatabase {
       pushNotificationsEnabled: true,
       status: UserStatus.ONLINE,
       ultima_atividade: Date.now(),
+      isFounder: isFirstUser,
+      occupation: isFirstUser ? 'Fundador & Administrador' : (userData.occupation || 'Membro da Tribo'),
       ...userData
     };
 
-    // Adicionar o novo usuário aos amigos do Wagner
-    const wagnerIdx = users.findIndex(u => u.id === 'wagner-001');
-    if (wagnerIdx !== -1) {
-      if (!users[wagnerIdx].friends.includes(newUser.id)) {
-        users[wagnerIdx].friends.push(newUser.id);
+    if (isFirstUser) {
+      users.push(newUser);
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+      // Criar a primeira postagem do fundador
+      const welcomePost: Post = {
+        id: 'welcome_post_founder',
+        authorId: newUser.id,
+        authorName: newUser.name,
+        authorAvatar: newUser.avatar,
+        authorIdentity: newUser.identityType,
+        type: 'text',
+        content: `Bem-vindos à TRIBO! 🚀 Esta rede social foi construída para dar às pessoas o controle total sobre sua vida digital, privacidade e livre expressão. Sinta-se livre para debater, plantar na nossa roça virtual e impulsionar nossa economia circular!`,
+        timestamp: new Date().toISOString(),
+        likes: 0,
+        likedBy: [],
+        lovedBy: [],
+        comments: []
+      };
+      this.savePost(welcomePost);
+
+      // Criar comunidades padrão com o fundador como dono
+      const defaultComms: Community[] = [
+        {
+          id: 'comm_soberania',
+          name: 'Soberania & Tecnologia',
+          description: 'Espaço para discussão de redes distribuídas, auto-hospedagem, privacidade e software livre.',
+          category: 'Tecnologia',
+          icon: '🛡️',
+          ownerId: newUser.id,
+          members: [newUser.id],
+          ranking: 100,
+          isPrivate: false,
+          isPremium: false,
+          createdAt: Date.now()
+        },
+        {
+          id: 'comm_agro_sintropia',
+          name: 'Agroecologia Sintrópica',
+          description: 'Compartilhando saberes práticos de agricultura natural, sementes crioulas e plantio de florestas.',
+          category: 'Agricultura',
+          icon: '🌱',
+          ownerId: newUser.id,
+          members: [newUser.id],
+          ranking: 90,
+          isPrivate: false,
+          isPremium: false,
+          createdAt: Date.now()
+        }
+      ];
+      localStorage.setItem(COMMUNITIES_KEY, JSON.stringify(defaultComms));
+
+      // Inicializar alguns produtos de demonstração do fundador
+      const defaultProducts: Product[] = [
+        {
+          id: 'prod_sementes_001',
+          name: 'Sementes de Milho Crioulas Orgânicas',
+          price: 15.0,
+          location: newUser.location || 'Brasil',
+          category: 'Agro & Sementes',
+          image: 'https://images.unsplash.com/photo-1551649001-c864c8785716?w=400&h=400&fit=crop',
+          sellerId: newUser.id,
+          sellerName: newUser.name,
+          status: 'active',
+          condition: 'Novo',
+          description: 'Sementes crioulas limpas, ideais para cultivo no modo de sintropia ou roça urbana. Alta taxa de germinação.',
+          views: 31,
+          createdAt: Date.now()
+        },
+        {
+          id: 'prod_livro_001',
+          name: 'Manual Prático de Auto-Suficiência',
+          price: 45.0,
+          location: newUser.location || 'Brasil',
+          category: 'Livros & Guias',
+          image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=400&fit=crop',
+          sellerId: newUser.id,
+          sellerName: newUser.name,
+          status: 'active',
+          condition: 'Novo',
+          description: 'Guia definitivo de soberania física e alimentar: plantio, bio-construção, filtragem de águas e redes off-grid.',
+          views: 104,
+          createdAt: Date.now()
+        }
+      ];
+      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(defaultProducts));
+
+    } else {
+      const founder = this.getFounder();
+      if (founder) {
+        newUser.friends = [founder.id];
+
+        // Adicionar o novo usuário aos amigos do fundador
+        const updatedUsers = users.map(u => {
+          if (u.id === founder.id) {
+            if (!u.friends.includes(newUser.id)) {
+              u.friends.push(newUser.id);
+            }
+          }
+          return u;
+        });
+
+        updatedUsers.push(newUser);
+        localStorage.setItem(USERS_KEY, JSON.stringify(updatedUsers));
+
+        // Criar conversa e mensagem de boas-vindas do fundador
+        const convId = `conv_${founder.id}_${newUser.id}`;
+        const convs: Conversation[] = JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || '[]');
+        if (!convs.find(c => c.id === convId)) {
+          convs.push({
+            id: convId,
+            participantes: [{ user_id: founder.id }, { user_id: newUser.id }],
+            lastMessage: `Bem-vindo à TRIBO, ${newUser.name}!`
+          });
+          localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs));
+        }
+
+        const welcomeMsg: Message = {
+          id: Math.random().toString(36).substr(2, 9),
+          conversa_id: convId,
+          remetente_id: founder.id,
+          tipo: 'texto',
+          conteudo: `Bem-vindo(a) à TRIBO, ${newUser.name}! Como fundador e administrador deste espaço soberano, é um prazer imenso ter você conosco. Sinta-se livre para debater ideias, plantar em sua roça virtual e interagir no Mercado livre de censura! 🚀`,
+          data_envio: Date.now(),
+          lida: false,
+          editada: false
+        };
+
+        const msgs: Message[] = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '[]');
+        msgs.push(welcomeMsg);
+        localStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs));
+      } else {
+        users.push(newUser);
+        localStorage.setItem(USERS_KEY, JSON.stringify(users));
       }
     }
 
-    users.push(newUser);
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-
-    // Criar conversa e mensagem de boas-vindas do Wagner
-    const convId = `conv_wagner_${newUser.id}`;
-    const convs: Conversation[] = JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || '[]');
-    if (!convs.find(c => c.id === convId)) {
-      convs.push({
-        id: convId,
-        participantes: [{ user_id: 'wagner-001' }, { user_id: newUser.id }],
-        lastMessage: 'Bem-vindo à TRIBO!'
-      });
-      localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs));
+    if (this.onMutation) {
+      this.onMutation('users', newUser, 'create');
     }
-
-    const welcomeMsg: Message = {
-      id: Math.random().toString(36).substr(2, 9),
-      conversa_id: convId,
-      remetente_id: 'wagner-001',
-      tipo: 'texto',
-      conteudo: 'Bem-vindo à TRIBO! Aqui, a liberdade de expressão é a nossa maior superioridade. Sinta-se livre para ser quem você é e construir conexões reais sem censura. 🚀',
-      data_envio: Date.now(),
-      lida: false,
-      editada: false
-    };
-    
-    const msgs: Message[] = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '[]');
-    msgs.push(welcomeMsg);
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs));
 
     return newUser;
   }
@@ -188,6 +247,9 @@ export class UserDatabase {
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
       if (user.pushNotificationsEnabled !== undefined) {
          localStorage.setItem('tribo_push_enabled', user.pushNotificationsEnabled ? 'true' : 'false');
+      }
+      if (this.onMutation) {
+        this.onMutation('users', users[index], 'update');
       }
     }
   }
@@ -266,6 +328,9 @@ export class UserDatabase {
     const posts: Post[] = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
     posts.unshift(post);
     localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+    if (this.onMutation) {
+      this.onMutation('posts', post, 'create');
+    }
   }
 
   static reactToPost(postId: string, userId: string): void {
@@ -278,6 +343,9 @@ export class UserDatabase {
       else posts[postIndex].likedBy.splice(userIdx, 1);
       posts[postIndex].likes = posts[postIndex].likedBy.length;
       localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+      if (this.onMutation) {
+        this.onMutation('posts', posts[postIndex], 'update');
+      }
     }
   }
 
@@ -289,6 +357,9 @@ export class UserDatabase {
       posts[postIndex].comments.push(comment);
       localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
       this.triggerSystemNotification("Novo Comentário", `${comment.authorName} comentou em uma postagem.`, comment.authorAvatar);
+      if (this.onMutation) {
+        this.onMutation('posts', posts[postIndex], 'update');
+      }
     }
   }
 
@@ -309,7 +380,12 @@ export class UserDatabase {
       }
       return false;
     };
-    if (findAndReact(posts[postIndex].comments)) localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+    if (findAndReact(posts[postIndex].comments)) {
+      localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+      if (this.onMutation) {
+        this.onMutation('posts', posts[postIndex], 'update');
+      }
+    }
   }
 
   static addReplyToComment(postId: string, parentCommentId: string, reply: Comment): void {
@@ -330,41 +406,48 @@ export class UserDatabase {
     if (findAndReply(posts[postIndex].comments)) {
       localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
       this.triggerSystemNotification("Resposta ao seu comentário", `${reply.authorName} respondeu a você na TRIBO.`, reply.authorAvatar);
+      if (this.onMutation) {
+        this.onMutation('posts', posts[postIndex], 'update');
+      }
     }
   }
 
   static getFeed(userId: string, mode: 'global' | 'tribo'): Post[] {
     let posts: Post[] = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
     
-    // Garantir que exista pelo menos um post de boas-vindas do Wagner para novos usuários
+    // Garantir que exista pelo menos um post de boas-vindas do fundador para novos usuários
     if (posts.length === 0) {
-      const welcomePost: Post = {
-        id: 'welcome-001',
-        authorId: 'wagner-001',
-        authorName: 'Wagner Alves de Lima',
-        authorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
-        authorIdentity: IdentityType.REAL,
-        type: 'text',
-        content: 'Bem-vindos à TRIBO! 🚀 Esta é a nossa rede social livre, focada em soberania digital e conexões reais. Sinta-se em casa, explore as comunidades e comece a construir sua história aqui.',
-        timestamp: 'Agora',
-        likes: 1,
-        likedBy: ['wagner-001'],
-        lovedBy: [],
-        comments: []
-      };
-      posts = [welcomePost];
-      localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+      const founder = this.getFounder();
+      if (founder) {
+        const welcomePost: Post = {
+          id: 'welcome-001',
+          authorId: founder.id,
+          authorName: founder.name,
+          authorAvatar: founder.avatar,
+          authorIdentity: founder.identityType,
+          type: 'text',
+          content: 'Bem-vindos à TRIBO! 🚀 Esta é a nossa rede social livre, focada em soberania digital e conexões reais. Sinta-se em casa, explore as comunidades e comece a construir sua história aqui.',
+          timestamp: new Date().toISOString(),
+          likes: 1,
+          likedBy: [founder.id],
+          lovedBy: [],
+          comments: []
+        };
+        posts = [welcomePost];
+        localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+      }
     }
 
     let filteredPosts = posts;
 
     if (mode === 'tribo') {
       const user = this.findById(userId);
+      const founder = this.getFounder();
       if (user) {
         filteredPosts = posts.filter(p => 
           user.friends.includes(p.authorId) || 
           p.authorId === userId || 
-          p.authorId === 'wagner-001' ||
+          (founder && p.authorId === founder.id) ||
           (p.communityId && user.joinedCommunities.includes(p.communityId))
         );
       }
@@ -396,6 +479,9 @@ export class UserDatabase {
     const stories = this.getStories();
     stories.unshift(story);
     localStorage.setItem(STORIES_KEY, JSON.stringify(stories));
+    if (this.onMutation) {
+      this.onMutation('stories', story, 'create');
+    }
   }
 
   static getNotifications(userId: string): AppNotification[] {
@@ -415,8 +501,16 @@ export class UserDatabase {
     return this.getUsers().filter(u => u.id !== excludeId && (u.name.toLowerCase().includes(lower) || u.username.toLowerCase().includes(lower)));
   }
 
+  static getMessages(): Message[] {
+    return JSON.parse(localStorage.getItem(MESSAGES_KEY) || '[]');
+  }
+
+  static getConversationsList(): Conversation[] {
+    return JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || '[]');
+  }
+
   static getConversations(userId: string): Conversation[] {
-    const convs: Conversation[] = JSON.parse(localStorage.getItem(CONVERSATIONS_KEY) || '[]');
+    const convs = this.getConversationsList();
     return convs.filter(c => c.participantes.some(p => p.user_id === userId));
   }
 
@@ -449,6 +543,13 @@ export class UserDatabase {
       localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs));
       const sender = this.findById(msg.remetente_id);
       this.triggerSystemNotification(`Mensagem de ${sender?.name}`, msg.tipo === 'texto' ? msg.conteudo : `Enviou uma ${msg.tipo}`, sender?.avatar);
+      
+      if (this.onDM) {
+        const recipient = convs[cIdx].participantes.find(p => p.user_id !== msg.remetente_id);
+        if (recipient) {
+          this.onDM(recipient.user_id, msg, convs[cIdx]);
+        }
+      }
     }
   }
 
@@ -480,6 +581,9 @@ export class UserDatabase {
     const products = this.getProducts();
     products.unshift(p);
     localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+    if (this.onMutation) {
+      this.onMutation('products', p, 'create');
+    }
   }
 
   static incrementProductViews(id: string): void {
@@ -497,6 +601,9 @@ export class UserDatabase {
     if (idx !== -1) {
       products[idx].status = status;
       localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+      if (this.onMutation) {
+        this.onMutation('products', products[idx], 'update');
+      }
     }
   }
 
@@ -504,6 +611,9 @@ export class UserDatabase {
     const products = this.getProducts();
     const filtered = products.filter(p => p.id !== id);
     localStorage.setItem(PRODUCTS_KEY, JSON.stringify(filtered));
+    if (this.onMutation) {
+      this.onMutation('products', { id }, 'delete');
+    }
   }
 
   static getPosts(): Post[] {
@@ -518,6 +628,9 @@ export class UserDatabase {
     const posts: Post[] = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
     const filtered = posts.filter(p => p.id !== id);
     localStorage.setItem(POSTS_KEY, JSON.stringify(filtered));
+    if (this.onMutation) {
+      this.onMutation('posts', { id }, 'delete');
+    }
   }
 
   static editPost(postId: string, newContent: string): void {
@@ -526,6 +639,9 @@ export class UserDatabase {
     if (postIndex !== -1) {
       posts[postIndex].content = newContent;
       localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+      if (this.onMutation) {
+        this.onMutation('posts', posts[postIndex], 'update');
+      }
     }
   }
 
@@ -550,6 +666,9 @@ export class UserDatabase {
 
     posts[postIndex].comments = removeRecursive(posts[postIndex].comments || []);
     localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+    if (this.onMutation) {
+      this.onMutation('posts', posts[postIndex], 'update');
+    }
   }
 
   static editComment(postId: string, commentId: string, newContent: string): void {
@@ -574,6 +693,9 @@ export class UserDatabase {
 
     posts[postIndex].comments = editRecursive(posts[postIndex].comments || []);
     localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+    if (this.onMutation) {
+      this.onMutation('posts', posts[postIndex], 'update');
+    }
   }
 
   static deleteStory(id: string, userId?: string): void {
@@ -585,6 +707,9 @@ export class UserDatabase {
     }
     const filtered = stories.filter(s => s.id !== id);
     localStorage.setItem(STORIES_KEY, JSON.stringify(filtered));
+    if (this.onMutation) {
+      this.onMutation('stories', { id }, 'delete');
+    }
   }
 
   static toggleWishlist(userId: string, productId: string): void {
@@ -617,6 +742,9 @@ export class UserDatabase {
     const comms = this.getCommunities();
     comms.unshift(c);
     localStorage.setItem(COMMUNITIES_KEY, JSON.stringify(comms));
+    if (this.onMutation) {
+      this.onMutation('communities', c, 'create');
+    }
   }
 
   static toggleJoinCommunity(userId: string, commId: string): void {
@@ -627,6 +755,9 @@ export class UserDatabase {
       if (mIdx === -1) comms[idx].members.push(userId);
       else comms[idx].members.splice(mIdx, 1);
       localStorage.setItem(COMMUNITIES_KEY, JSON.stringify(comms));
+      if (this.onMutation) {
+        this.onMutation('communities', comms[idx], 'update');
+      }
     }
   }
 
@@ -640,12 +771,18 @@ export class UserDatabase {
     const filtered = locs.filter(l => !(l.userId === loc.userId && l.targetType === loc.targetType && l.targetId === loc.targetId));
     filtered.unshift(loc);
     localStorage.setItem(SHARED_LOCATIONS_KEY, JSON.stringify(filtered));
+    if (this.onMutation) {
+      this.onMutation('sharedLocations', loc, 'create');
+    }
   }
 
   static deleteSharedLocation(id: string): void {
     const locs = this.getSharedLocations();
     const filtered = locs.filter(l => l.id !== id);
     localStorage.setItem(SHARED_LOCATIONS_KEY, JSON.stringify(filtered));
+    if (this.onMutation) {
+      this.onMutation('sharedLocations', { id }, 'delete');
+    }
   }
 
   static deleteSharedLocationsForUser(userId: string): void {
@@ -688,119 +825,13 @@ export class UserDatabase {
   }
 
   static seedDatabase(): void {
-    // 1. Garantir que Wagner existe
-    const users = this.getUsers();
-    
-    // 2. Criar comunidades padrão se estiver vazio
-    const communities = this.getCommunities();
-    if (communities.length === 0) {
-      const defaultComms: Community[] = [
-        {
-          id: 'comm_soberania',
-          name: 'Soberania & Tecnologia',
-          description: 'Espaço para discussão de redes distribuídas, auto-hospedagem, privacidade e software livre.',
-          category: 'Tecnologia',
-          icon: '🛡️',
-          ownerId: 'wagner-001',
-          members: ['wagner-001'],
-          ranking: 100,
-          isPrivate: false,
-          isPremium: false,
-          createdAt: Date.now()
-        },
-        {
-          id: 'comm_agro_sintropia',
-          name: 'Agroecologia Sintrópica',
-          description: 'Compartilhando saberes práticos de agricultura natural, sementes crioulas e plantio de florestas.',
-          category: 'Agricultura',
-          icon: '🌱',
-          ownerId: 'wagner-001',
-          members: ['wagner-001'],
-          ranking: 90,
-          isPrivate: false,
-          isPremium: false,
-          createdAt: Date.now()
-        }
-      ];
-      localStorage.setItem(COMMUNITIES_KEY, JSON.stringify(defaultComms));
-    }
-
-    // 3. Criar Postagens padrão se estiver vazio
-    const posts = this.getPosts();
-    if (posts.length === 0) {
-      const defaultPosts: Post[] = [
-        {
-          id: 'post_welcome',
-          authorId: 'wagner-001',
-          authorName: 'Wagner Alves de Lima',
-          authorAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
-          authorIdentity: IdentityType.REAL,
-          type: 'text',
-          content: 'Bem-vindos à TRIBO! 🚀 Esta rede social foi construída para dar às pessoas o controle total sobre sua vida digital, hábitos, privacidade e comércio. Sinta-se livre para debater, plantar na roça virtual e impulsionar nossa economia circular no Mercado.',
-          timestamp: new Date().toISOString(),
-          likes: 42,
-          likedBy: [],
-          lovedBy: [],
-          comments: [
-            {
-              id: 'c_001',
-              authorId: 'system',
-              authorName: 'Tribo Assistente',
-              authorAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=tribo',
-              content: 'Incrível! Tudo pronto para o lançamento soberano! 🛡️',
-              timestamp: new Date().toISOString(),
-              likedBy: [],
-              replies: []
-            }
-          ]
-        }
-      ];
-      localStorage.setItem(POSTS_KEY, JSON.stringify(defaultPosts));
-    }
-
-    // 4. Criar Produtos padrão se estiver vazio
-    const products = this.getProducts();
-    if (products.length === 0) {
-      const defaultProducts: Product[] = [
-        {
-          id: 'prod_sementes_001',
-          name: 'Sementes de Milho Crioulas Orgânicas',
-          price: 15.0,
-          location: 'Sorocaba, SP',
-          category: 'Agro & Sementes',
-          image: 'https://images.unsplash.com/photo-1551649001-c864c8785716?w=400&h=400&fit=crop',
-          sellerId: 'wagner-001',
-          sellerName: 'Wagner Alves de Lima',
-          status: 'active',
-          condition: 'Novo',
-          description: 'Sementes crioulas limpas, ideais para cultivo no modo de sintropia ou roça urbana. Alta taxa de germinação.',
-          views: 31,
-          createdAt: Date.now()
-        },
-        {
-          id: 'prod_livro_001',
-          name: 'Manual Prático de Auto-Suficiência',
-          price: 45.0,
-          location: 'São Paulo, BR',
-          category: 'Livros & Guias',
-          image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=400&fit=crop',
-          sellerId: 'wagner-001',
-          sellerName: 'Wagner Alves de Lima',
-          status: 'active',
-          condition: 'Novo',
-          description: 'Guia definitivo de soberania física e alimentar: plantio, bio-construção, filtragem de águas e redes off-grid.',
-          views: 104,
-          createdAt: Date.now()
-        }
-      ];
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(defaultProducts));
-    }
+    // Mantido limpo para permitir a criação dinâmica do fundador pelo usuário como primeiro registro
   }
 
   static wipeAllData(): void {
     localStorage.clear();
     localStorage.setItem('tribo_seeded', 'true');
-    this.seedDatabase();
+    localStorage.setItem('tribo_v5_dynamic_founder_clean', 'true');
   }
 }
 
