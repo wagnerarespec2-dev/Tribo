@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { User, Message, Conversation, UserStatus } from '../types';
 import { UserDatabase } from '../services/db';
+import { SyncClient } from '../services/syncClient';
 
 const StatusMarker: React.FC<{ status: UserStatus; size?: number }> = ({ status, size = 12 }) => {
   const colors = {
@@ -57,8 +58,17 @@ const ChatView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
       }
     };
     refreshData();
+
+    // Assinar atualizações em tempo real do SyncClient para mensagens instantâneas
+    const unsubscribe = SyncClient.addUpdateCallback(() => {
+      refreshData();
+    });
+
     const interval = setInterval(refreshData, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
   }, [currentUser.id, activeConvId, messages.length, offset]);
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Post, IdentityType, Story, Comment, User, Community } from '../types';
+import { Post, IdentityType, Story, Comment, User, Community, SharedLocation } from '../types';
 import { 
   X, 
   Loader2, 
@@ -21,9 +21,17 @@ import {
   Camera,
   Flag,
   Share2,
-  Reply
+  Reply,
+  MapPin,
+  UserPlus,
+  Radio,
+  Sparkles,
+  Check,
+  Navigation,
+  Globe
 } from 'lucide-react';
 import { UserDatabase } from '../services/db';
+import { SyncClient } from '../services/syncClient';
 
 import { StoriesBar } from '../src/components/StoriesBar';
 import { FeedPost } from '../src/components/FeedPost';
@@ -60,6 +68,13 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const navigate = useNavigate();
 
   useEffect(() => { setPosts(UserDatabase.getFeed(currentUser.id, mode)); }, [mode, currentUser.id, refreshKey]);
+
+  useEffect(() => {
+    const unsubscribe = SyncClient.addUpdateCallback(() => {
+      setRefreshKey(k => k + 1);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const allComms = UserDatabase.getCommunities();
@@ -128,11 +143,297 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     if (navigator.vibrate) navigator.vibrate(10);
   };
 
+  // Algorithm for Geolocation-based Friend Recommendations
+  const [sharingGPS, setSharingGPS] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const mySharedLocation = useMemo(() => {
+    const allShared = UserDatabase.getSharedLocations();
+    return allShared.find(l => l.userId === currentUser.id);
+  }, [currentUser.id, refreshKey]);
+
+  const localSuggestions = useMemo(() => {
+    const allUsers = UserDatabase.getUsers();
+    const myFriendsSet = new Set(currentUser.friends);
+    const allShared = UserDatabase.getSharedLocations();
+
+    // Map of unique newest shared location per user
+    const uniqueShared: Record<string, SharedLocation> = {};
+    allShared.forEach(loc => {
+      const userObj = allUsers.find(u => u.id === loc.userId);
+      if (userObj?.privacy?.incognitoMode === true || userObj?.privacy?.showLocation === false) {
+        return;
+      }
+      if (!uniqueShared[loc.userId] || uniqueShared[loc.userId].timestamp < loc.timestamp) {
+        uniqueShared[loc.userId] = loc;
+      }
+    });
+
+    const candidates = allUsers.filter(u => {
+      if (u.id === currentUser.id) return false;
+      if (myFriendsSet.has(u.id)) return false;
+      if (u.privacy?.incognitoMode === true) return false;
+      return true;
+    });
+
+    const mapped = candidates.map(u => {
+      let distanceKm: number | null = null;
+      let matchType: 'gps' | 'text' | 'general' = 'general';
+      let matchScore = 0; // Higher is closer/better
+      let locationLabel = u.location || 'Sem localização';
+
+      const uLoc = uniqueShared[u.id];
+      if (mySharedLocation && uLoc) {
+        distanceKm = calculateDistance(
+          mySharedLocation.latitude,
+          mySharedLocation.longitude,
+          uLoc.latitude,
+          uLoc.longitude
+        );
+        matchType = 'gps';
+        // Proximity scoring: users within 100km get matched, closer is higher score
+        matchScore = Math.max(0, 100 - distanceKm * 2);
+        locationLabel = uLoc.address || u.location || 'Região Próxima';
+      } else if (currentUser.location && u.location) {
+        const myCity = currentUser.location.split(',')[0].trim().toLowerCase();
+        const uCity = u.location.split(',')[0].trim().toLowerCase();
+        if (myCity && uCity && (myCity.includes(uCity) || uCity.includes(myCity))) {
+          matchType = 'text';
+          matchScore = 50;
+          locationLabel = u.location;
+        }
+      }
+
+      return { user: u, distanceKm, matchType, matchScore, locationLabel };
+    });
+
+    return mapped
+      .filter(item => item.matchType !== 'general' || item.user.location)
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 6);
+  }, [currentUser, mySharedLocation, refreshKey]);
+
+  const handleActivateRadar = async () => {
+    setSharingGPS(true);
+    setGpsError(null);
+    try {
+      if (!navigator.geolocation) {
+        setGpsError('Geolocalização não é suportada por este dispositivo.');
+        setSharingGPS(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          let addressString = currentUser.location || 'Minha Região';
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=14`
+            );
+            const data = await res.json();
+            const city = data.address.city || data.address.town || data.address.village || data.address.suburb || 'Minha Região';
+            const road = data.address.road || '';
+            addressString = road ? `${road}, ${city}` : city;
+          } catch (e) {
+            console.error('Erro de geocodificação reversa:', e);
+          }
+
+          const newLoc: SharedLocation = {
+            id: Math.random().toString(36).substring(2, 11),
+            userId: currentUser.id,
+            userName: currentUser.name,
+            userAvatar: currentUser.avatar,
+            latitude,
+            longitude,
+            address: addressString,
+            timestamp: Date.now(),
+            targetType: 'friends',
+            statusText: 'Ativo via Feed',
+            incognito: false,
+          };
+          UserDatabase.saveSharedLocation(newLoc);
+
+          const u = UserDatabase.findById(currentUser.id);
+          if (u) {
+            if (!u.privacy) u.privacy = {} as any;
+            u.privacy.showLocation = true;
+            u.privacy.incognitoMode = false;
+            UserDatabase.updateUser(u);
+          }
+          setRefreshKey(k => k + 1);
+          setSharingGPS(false);
+          playSubtleSound();
+          if (navigator.vibrate) navigator.vibrate([50, 100]);
+        },
+        (err) => {
+          console.error(err);
+          setGpsError('Permissão negada ou sinal de GPS indisponível.');
+          setSharingGPS(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } catch (e) {
+      console.error(e);
+      setSharingGPS(false);
+    }
+  };
+
+  const handleSendRequest = (toId: string) => {
+    UserDatabase.sendFriendRequest(currentUser.id, toId);
+    setRefreshKey(k => k + 1);
+    playSubtleSound();
+    if (navigator.vibrate) navigator.vibrate(30);
+  };
+
+  const handleCancelRequest = (toId: string) => {
+    UserDatabase.cancelFriendRequest(currentUser.id, toId);
+    setRefreshKey(k => k + 1);
+    playSubtleSound();
+    if (navigator.vibrate) navigator.vibrate(15);
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-12 animate-in fade-in duration-1000">
       <section className="space-y-6">
         <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-600 px-4">Instantâneos</h4>
         <StoriesBar currentUser={currentUser} onRefresh={() => setRefreshKey(k => k + 1)} />
+      </section>
+
+      {/* Seção de Conexões Locais & Radar */}
+      <section className="space-y-6 animate-in fade-in duration-700">
+        <div className="flex items-center justify-between px-4">
+          <div className="space-y-1">
+            <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-600 flex items-center gap-1.5">
+              <MapPin size={12} className="text-emerald-500 animate-pulse shrink-0" />
+              Radar da Tribo: Alianças Locais
+            </h4>
+            <p className="text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
+              {mySharedLocation 
+                ? `Radar Ativo • ${mySharedLocation.address}`
+                : "Construa comunidades reais com pessoas da sua região"}
+            </p>
+          </div>
+          {!mySharedLocation && (
+            <button 
+              onClick={handleActivateRadar}
+              disabled={sharingGPS}
+              className="text-[8px] font-black uppercase text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 disabled:opacity-50 select-none shrink-0"
+            >
+              {sharingGPS ? (
+                <>
+                  <Loader2 size={10} className="animate-spin" /> Ativando...
+                </>
+              ) : (
+                <>
+                  <Radio size={10} className="animate-pulse text-emerald-500" /> Ativar GPS
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+          {gpsError && (
+            <div className="mx-4 text-[9px] font-black text-rose-500 bg-rose-500/5 border border-rose-500/10 p-3 rounded-2xl animate-shake">
+              {gpsError}
+            </div>
+          )}
+
+          <div className="flex gap-4 overflow-x-auto scrollbar-hide px-4 py-1 snap-x">
+            {localSuggestions.length > 0 ? (
+              localSuggestions.map(({ user, distanceKm, matchType, locationLabel }) => {
+                const hasSent = UserDatabase.hasSentRequest(currentUser.id, user.id);
+                const isFriend = currentUser.friends.includes(user.id);
+                
+                return (
+                  <div 
+                    key={user.id}
+                    className="flex-none w-[170px] bg-zinc-900 border border-white/5 rounded-[2.5rem] p-5 flex flex-col items-center justify-between relative snap-center group hover:border-emerald-500/20 transition-all"
+                  >
+                    <div className="flex flex-col items-center text-center w-full">
+                      {/* Avatar do Usuário */}
+                      <div 
+                        onClick={() => navigate(`/profile/${user.id}`)}
+                        className="w-16 h-16 rounded-2xl overflow-hidden mb-3 border border-white/5 shadow-lg group-hover:scale-105 transition-transform duration-300 cursor-pointer relative shrink-0"
+                      >
+                        <img src={user.avatar} className="w-full h-full object-cover animate-in fade-in duration-500" alt={user.name} />
+                        <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full border-2 border-zinc-900 bg-emerald-500 shadow-md" />
+                      </div>
+
+                      <h5 
+                        onClick={() => navigate(`/profile/${user.id}`)}
+                        className="text-xs font-black text-white truncate w-full hover:text-emerald-400 cursor-pointer mb-0.5"
+                      >
+                        {user.name}
+                      </h5>
+                      <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-3 truncate w-full">@{user.username}</p>
+
+                      {/* Badge de Distância/Localização */}
+                      <div className="w-full mb-4">
+                        {matchType === 'gps' && distanceKm !== null ? (
+                          <div className="bg-emerald-500/5 border border-emerald-500/10 py-1.5 px-2 rounded-xl flex items-center justify-center gap-1 select-none">
+                            <Navigation size={8} className="text-emerald-500 rotate-45 shrink-0 animate-pulse" />
+                            <span className="text-[7.5px] font-black text-emerald-400 uppercase tracking-widest truncate">
+                              {distanceKm < 1 ? 'Menos de 1 km' : `A ${distanceKm.toFixed(1)} km`}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="bg-blue-500/5 border border-blue-500/10 py-1.5 px-2 rounded-xl flex items-center justify-center gap-1 select-none">
+                            <Globe size={8} className="text-blue-500 shrink-0" />
+                            <span className="text-[7.5px] font-black text-blue-400 uppercase tracking-widest truncate">
+                              {locationLabel}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Ação de Conectar */}
+                    <div className="w-full">
+                      {isFriend ? (
+                        <div className="w-full bg-zinc-950 text-zinc-600 text-center py-2.5 rounded-xl text-[7px] font-black uppercase tracking-widest border border-white/5 select-none">
+                          Aliado ✔
+                        </div>
+                      ) : hasSent ? (
+                        <button 
+                          onClick={() => handleCancelRequest(user.id)}
+                          className="w-full bg-zinc-950 text-zinc-400 hover:text-rose-500 text-center py-2.5 rounded-xl text-[7px] font-black uppercase tracking-widest border border-white/5 transition-all"
+                        >
+                          Pendente
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleSendRequest(user.id)}
+                          className="w-full bg-emerald-500 hover:bg-emerald-400 text-black text-center py-2.5 rounded-xl text-[7px] font-black uppercase tracking-widest transition-all shadow-md shadow-emerald-500/10 active:scale-95 flex items-center justify-center gap-1"
+                        >
+                          <UserPlus size={10} strokeWidth={2.5} /> Conectar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full py-8 text-center bg-zinc-900/40 rounded-[2.5rem] border border-white/5 px-6 flex flex-col items-center justify-center gap-2">
+                <Compass size={24} className="text-zinc-700 animate-spin duration-3000" />
+                <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest max-w-[240px] leading-relaxed">
+                  Ative o GPS acima ou configure sua cidade no perfil para descobrir aliados ao seu redor!
+                </p>
+              </div>
+            )}
+          </div>
       </section>
 
       {userCommunities.length === 0 && (

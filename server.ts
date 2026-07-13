@@ -57,7 +57,7 @@ async function startServer() {
   const server = http.createServer(app);
 
   // Criar o servidor WebSocket acoplado ao servidor HTTP (compartilhando a porta 3000)
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({ server, path: "/ws" });
 
   // Funções Auxiliares para Sincronismo & Resolução de Conflitos
   function mergeArraysById(serverArr: any[], clientArr: any[]): any[] {

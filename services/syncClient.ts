@@ -56,7 +56,7 @@ export class SyncClient {
     // Determinar protocolo (ws ou wss) com base na URL do aplicativo
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const wsUrl = `${protocol}//${host}`;
+    const wsUrl = `${protocol}//${host}/ws`;
 
     console.log(`[TRIBO SYNC] Conectando ao relay de internet: ${wsUrl}`);
 

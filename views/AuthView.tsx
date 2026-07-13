@@ -53,8 +53,16 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
 
   const [birthParts, setBirthParts] = useState({ day: '', month: '', year: '' });
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
-  const [generatedCode] = useState('123456');
+  const [generatedCode, setGeneratedCode] = useState('123456');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerEmailCode = () => {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedCode(code);
+    setVerificationCode(['', '', '', '', '', '']);
+    setError('');
+    if (navigator.vibrate) navigator.vibrate([40, 60]);
+  };
 
   const calculateAge = (d: number, m: number, y: number) => {
     const today = new Date();
@@ -80,8 +88,14 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
   const nextPhase = () => {
     setError('');
     if (signupPhase === 'account') {
-      if (!formData.username || !formData.password) {
-        setError('Preencha seu nome de usuário e senha.');
+      if (!formData.username || !formData.email || !formData.password) {
+        setError('Preencha seu nome de usuário, e-mail e senha.');
+        return;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        setError('Por favor, insira um endereço de e-mail válido.');
         return;
       }
       
@@ -94,6 +108,12 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
       const existing = UserDatabase.getUsers().find(u => u.username.toLowerCase() === formData.username.toLowerCase().replace('@', ''));
       if (existing) {
         setError('Este @username já está em uso.');
+        return;
+      }
+
+      const existingEmail = UserDatabase.getUsers().find(u => u.email?.toLowerCase() === formData.email.toLowerCase());
+      if (existingEmail) {
+        setError('Este e-mail já está cadastrado.');
         return;
       }
       setSignupPhase('profile');
@@ -143,7 +163,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
   const handleCompleteSignup = async () => {
     const enteredCode = verificationCode.join('');
     if (enteredCode !== generatedCode) {
-      setError('Código inválido (use 123456).');
+      setError(`Código inválido (use ${generatedCode}).`);
       return;
     }
     setLoading(true);
@@ -159,7 +179,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
   // Tela de Manifesto
   if (!hasAcceptedManifesto) {
     return (
-      <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center p-6 animate-in fade-in duration-700">
+      <div className="min-h-full h-full flex-1 bg-[#050505] flex items-center justify-center p-6 animate-in fade-in duration-700 overflow-y-auto scrollbar-hide">
         <div className="w-full max-w-2xl bg-zinc-900/40 border border-white/5 p-10 md:p-16 rounded-[4rem] shadow-2xl backdrop-blur-3xl space-y-10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity">
             <Scale size={200} className="text-emerald-500" />
@@ -216,7 +236,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
   }[signupPhase];
 
   return (
-    <div className="min-h-[100dvh] bg-[#050505] flex flex-col items-center justify-center p-4 relative overflow-y-auto scrollbar-hide animate-in fade-in duration-500">
+    <div className="min-h-full h-full flex-1 bg-[#050505] flex flex-col items-center justify-center p-4 relative overflow-y-auto scrollbar-hide animate-in fade-in duration-500">
       <div className="absolute top-0 inset-x-0 h-1 bg-zinc-900 z-50">
         <div className="h-full bg-emerald-500 transition-all duration-700" style={{ width: `${progress}%` }}></div>
       </div>
@@ -264,10 +284,14 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
               </div>
 
               {signupPhase === 'account' && (
-                <div className="space-y-4">
+                <div className="space-y-4 animate-in fade-in">
                   <div className="relative group">
                     <AtSign className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" size={18} />
                     <input value={formData.username} onChange={(e) => setFormData({...formData, username: e.target.value})} type="text" placeholder="Escolha seu @username" className="w-full bg-zinc-950 border border-white/5 rounded-2xl py-4 pl-12 text-white focus:border-emerald-500/40 outline-none text-sm" />
+                  </div>
+                  <div className="relative group">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                    <input value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} type="email" placeholder="Seu melhor e-mail" className="w-full bg-zinc-950 border border-white/5 rounded-2xl py-4 pl-12 text-white focus:border-emerald-500/40 outline-none text-sm" />
                   </div>
                   <div className="relative group">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-emerald-500 transition-colors" size={18} />
@@ -363,19 +387,43 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                       </div>
                     </div>
                     <div className="space-y-2">
+                      <div className="flex justify-between text-[9px] font-black uppercase text-zinc-600 tracking-widest"><span>E-mail</span><span className="text-zinc-400 max-w-[150px] truncate">{formData.email}</span></div>
                       <div className="flex justify-between text-[9px] font-black uppercase text-zinc-600 tracking-widest"><span>Local</span><span className="text-zinc-400">{formData.location}</span></div>
                       <div className="flex justify-between text-[9px] font-black uppercase text-zinc-600 tracking-widest"><span>Gênero</span><span className="text-emerald-500">{formData.gender}</span></div>
                       <div className="flex justify-between text-[9px] font-black uppercase text-zinc-600 tracking-widest"><span>Maturidade</span><span className="text-emerald-500">Confirmada</span></div>
                     </div>
                   </div>
-                  <button onClick={() => setSignupPhase('verification')} className="w-full bg-emerald-500 text-black font-black py-6 rounded-[2rem] uppercase tracking-widest text-[11px] shadow-2xl active:scale-95 transition-all">Ativar Identidade</button>
+                  <button onClick={() => { triggerEmailCode(); setSignupPhase('verification'); }} className="w-full bg-emerald-500 text-black font-black py-6 rounded-[2rem] uppercase tracking-widest text-[11px] shadow-2xl active:scale-95 transition-all">Ativar Identidade</button>
                 </div>
               )}
 
               {signupPhase === 'verification' && (
-                <div className="space-y-8 text-center animate-in fade-in">
-                  <ShieldCheck className="mx-auto text-emerald-500" size={48} />
-                  <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest px-8">Identidade processada. Insira o código de ativação local (Use 123456)</p>
+                <div className="space-y-6 text-center animate-in fade-in">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-2">
+                    <Mail className="text-emerald-500" size={24} />
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest">CONFIRME SEU E-MAIL</h3>
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider px-4">
+                      Enviamos um código de verificação para o endereço:<br />
+                      <span className="text-emerald-400 font-black normal-case">{formData.email}</span>
+                    </p>
+                  </div>
+
+                  {/* Simulated Email Delivery Inbox Notification */}
+                  <div className="bg-zinc-950 p-4 rounded-3xl border border-white/5 text-left space-y-2 relative overflow-hidden">
+                    <div className="absolute right-2 top-2 bg-emerald-500/10 text-emerald-400 text-[6.5px] font-black uppercase px-2 py-0.5 rounded-full">Simulador</div>
+                    <div className="flex gap-2 items-center">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-[8px] font-black text-zinc-400 uppercase tracking-wider">Servidor de E-mail Tribo</span>
+                    </div>
+                    <p className="text-[10px] text-zinc-300 font-medium leading-relaxed">
+                      Sua conta está quase pronta! Use o código de ativação enviado:<br />
+                      <span className="text-emerald-400 font-black tracking-widest text-base font-mono">{generatedCode}</span>
+                    </p>
+                  </div>
+
                   <div className="grid grid-cols-6 gap-2">
                     {verificationCode.map((digit, idx) => (
                       <input key={idx} id={`code-${idx}`} type="text" maxLength={1} value={digit} onChange={(e) => {
@@ -383,10 +431,14 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
                         newCode[idx] = e.target.value.slice(-1);
                         setVerificationCode(newCode);
                         if (e.target.value && idx < 5) document.getElementById(`code-${idx+1}`)?.focus();
-                      }} className="w-full aspect-square bg-zinc-950 border border-white/10 rounded-xl text-center text-xl font-black text-emerald-500" />
+                      }} className="w-full aspect-square bg-zinc-950 border border-white/10 rounded-xl text-center text-xl font-black text-emerald-500 focus:border-emerald-500/40 outline-none" />
                     ))}
                   </div>
-                  <button onClick={handleCompleteSignup} className="w-full bg-emerald-500 text-black font-black py-6 rounded-[2rem] uppercase tracking-widest text-[11px] active:scale-95 transition-all">Verificar e Entrar</button>
+
+                  <div className="flex flex-col gap-2 pt-2">
+                    <button onClick={handleCompleteSignup} className="w-full bg-emerald-500 text-black font-black py-5 rounded-[2.2rem] uppercase tracking-widest text-[11px] active:scale-95 transition-all shadow-xl shadow-emerald-500/10">Confirmar Código</button>
+                    <button onClick={triggerEmailCode} className="text-[8px] font-black text-zinc-500 uppercase tracking-widest hover:text-emerald-400 transition-colors py-2">Reenviar Código de Confirmação</button>
+                  </div>
                 </div>
               )}
 
