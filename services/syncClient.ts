@@ -28,7 +28,7 @@ export class SyncClient {
       try {
         cb();
       } catch (e) {
-        console.error('Erro ao invocar callback de sincronismo:', e);
+        console.warn('Erro ao invocar callback de sincronismo:', e);
       }
     });
   }
@@ -86,7 +86,7 @@ export class SyncClient {
           const message = JSON.parse(event.data);
           this.handleIncomingMessage(message);
         } catch (e) {
-          console.error('[TRIBO SYNC] Erro ao parsear mensagem recebida:', e);
+          console.warn('[TRIBO SYNC] Erro ao parsear mensagem recebida:', e);
         }
       };
 
@@ -98,11 +98,11 @@ export class SyncClient {
       };
 
       this.socket.onerror = (err) => {
-        console.error('[TRIBO SYNC] Erro no socket de sincronismo:', err);
+        console.warn('[TRIBO SYNC] Erro no socket de sincronismo:', err);
         this.isConnecting = false;
       };
     } catch (e) {
-      console.error('[TRIBO SYNC] Falha crítica ao iniciar conexão socket:', e);
+      console.warn('[TRIBO SYNC] Falha crítica ao iniciar conexão socket:', e);
       this.isConnecting = false;
       this.scheduleReconnect();
     }
@@ -200,7 +200,14 @@ export class SyncClient {
         const { collection, item, action, senderId } = payload;
         console.log(`[TRIBO SYNC] Mutação recebida da rede: ${action} na coleção ${collection}`);
 
-        const localDataRaw = localStorage.getItem(`tribo_${collection}_v4`);
+        const getLocalStorageKey = (col: string) => {
+          if (col === 'sharedLocations') return 'tribo_shared_locations_v4';
+          if (col === 'conversations') return 'tribo_convs_v4';
+          if (col === 'messages') return 'tribo_msgs_v4';
+          return `tribo_${col}_v4`;
+        };
+        const localKey = getLocalStorageKey(collection);
+        const localDataRaw = localStorage.getItem(localKey);
         let localArray: any[] = localDataRaw ? JSON.parse(localDataRaw) : [];
 
         if (action === 'create' || action === 'update') {
@@ -214,7 +221,7 @@ export class SyncClient {
           localArray = localArray.filter((i: any) => i.id !== item.id);
         }
 
-        localStorage.setItem(`tribo_${collection}_v4`, JSON.stringify(localArray));
+        localStorage.setItem(localKey, JSON.stringify(localArray));
         this.triggerCallbacks();
         break;
       }

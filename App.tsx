@@ -14,7 +14,10 @@ import {
   Users,
   Tractor,
   Compass,
-  User as UserIcon
+  User as UserIcon,
+  Sun,
+  Moon,
+  Palette
 } from 'lucide-react';
 
 import FeedView from './views/FeedView';
@@ -37,7 +40,9 @@ const TopHeader: React.FC<{
   isIncognito: boolean; 
   onToggleIncognito: () => void;
   onStartTour?: () => void;
-}> = ({ currentUser, isIncognito, onToggleIncognito, onStartTour }) => {
+  currentTheme: 'light' | 'dark' | 'nostalgia';
+  onToggleTheme: () => void;
+}> = ({ currentUser, isIncognito, onToggleIncognito, onStartTour, currentTheme, onToggleTheme }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -56,7 +61,7 @@ const TopHeader: React.FC<{
   }, [fetchNotifs]);
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-black/70 backdrop-blur-2xl border-b border-white/5 pt-safe">
+    <div className="fixed top-0 left-0 right-0 z-50 bg-[var(--msn-sidebar)] backdrop-blur-2xl border-b border-white/5 pt-safe transition-colors duration-300">
       <div className="h-16 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <NavLink to="/" className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center font-black text-black italic text-xl shadow-lg shadow-emerald-500/20">T</NavLink>
@@ -80,6 +85,21 @@ const TopHeader: React.FC<{
               </span>
             </button>
           )}
+
+          {/* Botão de Tema */}
+          <button 
+            onClick={onToggleTheme} 
+            className="p-2.5 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-xl transition-all flex items-center justify-center relative"
+            title="Alterar Tema (Modo Claro / Modo Escuro / Nostalgia)"
+          >
+            {currentTheme === 'light' ? (
+              <Moon size={18} className="text-amber-400" />
+            ) : currentTheme === 'nostalgia' ? (
+              <Palette size={18} className="text-rose-400 animate-pulse" />
+            ) : (
+              <Sun size={18} className="text-yellow-400" />
+            )}
+          </button>
 
           <button 
             onClick={onToggleIncognito} 
@@ -171,8 +191,48 @@ const App: React.FC = () => {
     }
     return null;
   });
+  const [theme, setTheme] = useState<'light' | 'dark' | 'nostalgia'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tribo_theme');
+      if (saved === 'light' || saved === 'dark' || saved === 'nostalgia') {
+        return saved;
+      }
+    }
+    return 'dark';
+  });
   const [isIncognito, setIsIncognito] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const [syncCount, setSyncCount] = useState(0);
+
+  const toggleTheme = () => {
+    const nextThemeMap: Record<'light' | 'dark' | 'nostalgia', 'light' | 'dark' | 'nostalgia'> = {
+      dark: 'light',
+      light: 'nostalgia',
+      nostalgia: 'dark'
+    };
+    const nextTheme = nextThemeMap[theme];
+    setTheme(nextTheme);
+    
+    if (currentUser) {
+      const updatedUser = { ...currentUser, themePreference: nextTheme };
+      UserDatabase.updateUser(updatedUser);
+      setCurrentUser(updatedUser);
+    }
+    if (navigator.vibrate) navigator.vibrate(15);
+  };
+
+  const [visitorId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      let vid = localStorage.getItem('tribo_visitor_id');
+      if (!vid) {
+        vid = 'visitor_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('tribo_visitor_id', vid);
+      }
+      return vid;
+    }
+    return 'visitor_temp';
+  });
+
   const [isBiometricLocked, setIsBiometricLocked] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('tribo_logged_user_id');
@@ -211,6 +271,7 @@ const App: React.FC = () => {
       })
       .then(data => {
         UserDatabase.bootstrapState(data);
+        setSyncCount(prev => prev + 1);
         // Atualiza os dados do usuário caso já estivesse logado
         const savedId = localStorage.getItem('tribo_logged_user_id');
         if (savedId) {
@@ -255,28 +316,36 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
-      // Conecta ao servidor central de internet
-      SyncClient.connect(currentUser.id);
+    const activeConnectionId = currentUser ? currentUser.id : visitorId;
 
-      // Assina atualizações em tempo real recebidas de outros aparelhos
-      const unsubscribe = SyncClient.addUpdateCallback(() => {
-        refreshUser();
-      });
+    // Conecta ao servidor central de internet (como usuário ou visitante para sincronismo em segundo plano)
+    SyncClient.connect(activeConnectionId);
 
-      return () => {
-        unsubscribe();
-        SyncClient.disconnect();
-      };
-    }
-  }, [currentUser, refreshUser]);
+    // Assina atualizações em tempo real recebidas de outros aparelhos
+    const unsubscribe = SyncClient.addUpdateCallback(() => {
+      refreshUser();
+      setSyncCount(prev => prev + 1);
+    });
+
+    return () => {
+      unsubscribe();
+      SyncClient.disconnect();
+    };
+  }, [currentUser, visitorId, refreshUser]);
 
   useEffect(() => {
     if (currentUser?.themePreference) {
-      document.documentElement.classList.remove('light', 'dark', 'nostalgia');
-      document.documentElement.classList.add(currentUser.themePreference);
+      setTheme(currentUser.themePreference);
     }
-    
+  }, [currentUser?.themePreference]);
+
+  useEffect(() => {
+    document.documentElement.classList.remove('light', 'dark', 'nostalgia');
+    document.documentElement.classList.add(theme);
+    localStorage.setItem('tribo_theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
     // Registrar o Service Worker e solicitar permissão se ativado
     if (currentUser?.pushNotificationsEnabled && SWManager.isSupported()) {
       SWManager.register().then(() => {
@@ -285,7 +354,7 @@ const App: React.FC = () => {
         }
       });
     }
-  }, [currentUser?.themePreference, currentUser?.pushNotificationsEnabled]);
+  }, [currentUser?.pushNotificationsEnabled]);
 
   const toggleIncognito = () => {
     setIsIncognito(!isIncognito);
@@ -294,7 +363,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (!currentUser) {
-      return <AuthView onLogin={setCurrentUser} />;
+      return <AuthView onLogin={setCurrentUser} syncTrigger={syncCount} />;
     }
 
     if (isBiometricLocked) {
@@ -303,18 +372,25 @@ const App: React.FC = () => {
 
     return (
       <div className={`min-h-[100dvh] bg-[var(--msn-bg)] text-[var(--msn-text)] flex flex-col relative ${isIncognito ? 'privacy-active' : ''}`}>
-        <TopHeader currentUser={currentUser} isIncognito={isIncognito} onToggleIncognito={toggleIncognito} onStartTour={() => setIsTourOpen(true)} />
+        <TopHeader 
+          currentUser={currentUser} 
+          isIncognito={isIncognito} 
+          onToggleIncognito={toggleIncognito} 
+          onStartTour={() => setIsTourOpen(true)} 
+          currentTheme={theme}
+          onToggleTheme={toggleTheme}
+        />
         <main className={`flex-grow pt-24 pb-24 px-4 overflow-x-hidden ${isIncognito ? 'incognito-blur' : ''}`}>
           <Routes>
-            <Route path="/" element={<FeedView currentUser={currentUser} />} />
-            <Route path="/friends" element={<FriendsView currentUser={currentUser} onUpdate={refreshUser} />} />
-            <Route path="/communities" element={<CommunitiesView currentUser={currentUser} />} />
-            <Route path="/chat" element={<ChatView currentUser={currentUser} />} />
+            <Route path="/" element={<FeedView currentUser={currentUser} syncTrigger={syncCount} />} />
+            <Route path="/friends" element={<FriendsView currentUser={currentUser} onUpdate={refreshUser} syncTrigger={syncCount} />} />
+            <Route path="/communities" element={<CommunitiesView currentUser={currentUser} syncTrigger={syncCount} />} />
+            <Route path="/chat" element={<ChatView currentUser={currentUser} syncTrigger={syncCount} />} />
             <Route path="/universo" element={<UniversoView currentUser={currentUser} />} />
-            <Route path="/mercado" element={<MarketplaceView currentUser={currentUser} />} />
+            <Route path="/mercado" element={<MarketplaceView currentUser={currentUser} syncTrigger={syncCount} />} />
             {/* Rota de perfil flexível */}
-            <Route path="/profile" element={<ProfileView currentUser={currentUser} onUpdate={refreshUser} />} />
-            <Route path="/profile/:userId" element={<ProfileView currentUser={currentUser} onUpdate={refreshUser} />} />
+            <Route path="/profile" element={<ProfileView currentUser={currentUser} onUpdate={refreshUser} syncTrigger={syncCount} />} />
+            <Route path="/profile/:userId" element={<ProfileView currentUser={currentUser} onUpdate={refreshUser} syncTrigger={syncCount} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>

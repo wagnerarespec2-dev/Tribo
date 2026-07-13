@@ -27,11 +27,12 @@ import { IdentityType } from '../types';
 
 interface AuthViewProps {
   onLogin: (user: any) => void;
+  syncTrigger?: number;
 }
 
 type SignupPhase = 'account' | 'profile' | 'identity' | 'summary' | 'verification';
 
-const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
+const AuthView: React.FC<AuthViewProps> = ({ onLogin, syncTrigger }) => {
   const [hasAcceptedManifesto, setHasAcceptedManifesto] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [signupPhase, setSignupPhase] = useState<SignupPhase>('account');

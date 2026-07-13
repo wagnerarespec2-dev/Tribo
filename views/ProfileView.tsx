@@ -45,7 +45,8 @@ import {
   CheckCircle2,
   RefreshCcw,
   Sparkles,
-  Database
+  Database,
+  Palette
 } from 'lucide-react';
 import { UserDatabase } from '../services/db';
 import { SWManager, ServiceWorkerState } from '../services/swManager';
@@ -55,9 +56,10 @@ import { ConnectionStats } from '../src/components/ConnectionStats';
 interface ProfileProps {
   currentUser: User;
   onUpdate?: () => void;
+  syncTrigger?: number;
 }
 
-const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
+const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigger }) => {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   
@@ -228,7 +230,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
     } else {
       navigate('/profile');
     }
-  }, [userId, currentUser.id, navigate]);
+  }, [userId, currentUser.id, navigate, syncTrigger]);
 
   const isOwnProfile = useMemo(() => viewedUser?.id === currentUser.id, [viewedUser, currentUser.id]);
 
@@ -1377,6 +1379,54 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate }) => {
                   </p>
                 </div>
               </div>
+
+              {/* Tema Visual do Aplicativo */}
+              {viewedUser && (
+                <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-8 md:p-10 space-y-6 shadow-xl relative overflow-hidden">
+                  <div className="pb-6 border-b border-white/5 flex gap-4 items-start">
+                    <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 shrink-0">
+                      <Palette size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-white tracking-tight">Tema do Aplicativo</h3>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-1">Escolha o visual que melhor se adapta a você</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {[
+                      { id: 'dark', label: 'Modo Escuro 🌙', desc: 'Preto puro para economizar bateria e proteger a visão.', activeColor: 'border-emerald-500 bg-zinc-950/80 text-white' },
+                      { id: 'light', label: 'Modo Claro ☀️', desc: 'Alto contraste com fundos limpos e legibilidade impecável.', activeColor: 'border-emerald-500 bg-white text-zinc-900 animate-in fade-in duration-200' },
+                      { id: 'nostalgia', label: 'Modo Nostalgia 🌾', desc: 'Estética azul clássica inspirada no clima de campo.', activeColor: 'border-emerald-500 bg-sky-100 text-sky-900' }
+                    ].map((t) => {
+                      const isSelected = (viewedUser.themePreference || 'dark') === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            const updatedUser: User = { ...viewedUser, themePreference: t.id as any };
+                            UserDatabase.updateUser(updatedUser);
+                            setViewedUser(updatedUser);
+                            if (onUpdate) onUpdate();
+                            if (navigator.vibrate) navigator.vibrate(15);
+                          }}
+                          className={`flex flex-col text-left p-6 rounded-[2rem] border transition-all duration-300 ${
+                            isSelected 
+                              ? `${t.activeColor} border-2 shadow-lg shadow-emerald-500/10 scale-[1.02]` 
+                              : 'border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/60 hover:border-zinc-700 text-zinc-400'
+                          }`}
+                        >
+                          <span className="font-extrabold text-sm mb-1.5 flex items-center gap-1.5">
+                            {t.label}
+                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                          </span>
+                          <span className="text-[10px] font-medium leading-relaxed opacity-80">{t.desc}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Permanent Invisible Mode */}
               <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-8 md:p-10 space-y-6 shadow-xl">

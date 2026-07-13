@@ -43,9 +43,10 @@ const StatusMarker: React.FC<{ status: UserStatus; size?: number }> = ({ status,
 interface FriendsViewProps {
   currentUser: User;
   onUpdate?: () => void;
+  syncTrigger?: number;
 }
 
-const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate }) => {
+const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTrigger }) => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [friendSearchTerm, setFriendSearchTerm] = useState('');
@@ -254,6 +255,11 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate }) => {
 
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, currentUser.id]);
+
+  // Atualizar lista imediatamente quando ocorrer uma sincronização em tempo real
+  useEffect(() => {
+    setRefreshKey(prev => prev + 1);
+  }, [syncTrigger]);
 
   // Sincronização em tempo real: atualiza a lista e simula alteração aleatória de status
   useEffect(() => {

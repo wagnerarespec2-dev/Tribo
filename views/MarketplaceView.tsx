@@ -35,7 +35,12 @@ import { useNavigate } from 'react-router-dom';
 const CATEGORIES = ['Eletrônicos', 'Serviços Pro', 'Móveis', 'Moda', 'Veículos', 'Imóveis', 'Esportes', 'Arte', 'Outros'];
 const CONDITIONS = ['Novo', 'Usado - Excelente', 'Usado - Bom', 'Usado - Razoável'];
 
-const MarketplaceView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+interface MarketplaceViewProps {
+  currentUser: User;
+  syncTrigger?: number;
+}
+
+const MarketplaceView: React.FC<MarketplaceViewProps> = ({ currentUser, syncTrigger }) => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,7 +64,7 @@ const MarketplaceView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
   useEffect(() => {
     refreshProducts();
-  }, []);
+  }, [syncTrigger]);
 
   const refreshProducts = () => {
     setProducts(UserDatabase.getProducts());

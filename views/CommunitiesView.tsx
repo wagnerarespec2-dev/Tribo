@@ -25,7 +25,12 @@ import { UserDatabase } from '../services/db';
 
 const CATEGORIES = ['Tecnologia', 'Finanças', 'Estilo de Vida', 'Jurídico', 'Educação', 'Artes', 'Esportes', 'Culinária'];
 
-const CommunitiesView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+interface CommunitiesViewProps {
+  currentUser: User;
+  syncTrigger?: number;
+}
+
+const CommunitiesView: React.FC<CommunitiesViewProps> = ({ currentUser, syncTrigger }) => {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tudo');
@@ -48,7 +53,7 @@ const CommunitiesView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
   useEffect(() => {
     refreshCommunities();
-  }, []);
+  }, [syncTrigger]);
 
   const refreshCommunities = () => {
     setCommunities(UserDatabase.getCommunities());
