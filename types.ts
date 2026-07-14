@@ -42,6 +42,8 @@ export interface User {
   languages?: string;
   interests?: string;
   friends: string[];
+  following?: string[];
+  followers?: string[];
   bookmarks: string[];
   joinedCommunities: string[];
   friendRequests: { fromId: string; timestamp: string }[];
@@ -166,7 +168,7 @@ export interface Post {
   authorName: string;
   authorAvatar: string;
   authorIdentity: IdentityType;
-  type: 'text' | 'video';
+  type: 'text' | 'video' | 'image';
   content: string;
   timestamp: string;
   likes: number;

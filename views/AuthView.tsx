@@ -245,9 +245,9 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin, syncTrigger }) => {
       <div className="w-full max-w-md relative z-10 flex flex-col items-center py-10">
         <div className="flex flex-col items-center mb-8 group">
           <div className="w-14 h-14 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg mb-3 transform -rotate-3 group-hover:rotate-0 transition-transform">
-            <span className="font-black text-black text-3xl italic">T</span>
+            <span className="font-black text-black text-3xl italic">P</span>
           </div>
-          <h1 className="text-3xl font-black tracking-tighter text-white">TRIBO</h1>
+          <h1 className="text-3xl font-black tracking-tighter text-white">PÁGINAS</h1>
           <p className="text-zinc-600 font-black text-[8px] tracking-[0.4em] uppercase mt-1 opacity-60">Soberania Digital</p>
         </div>
 
@@ -305,7 +305,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin, syncTrigger }) => {
                 <div className="space-y-4">
                   <div className="flex flex-col items-center mb-6">
                     <div onClick={() => fileInputRef.current?.click()} className="relative w-28 h-28 rounded-[2.5rem] bg-zinc-950 border-4 border-dashed border-zinc-800 flex items-center justify-center cursor-pointer overflow-hidden group hover:border-emerald-500/40 transition-all">
-                      {formData.avatar ? <img src={formData.avatar} className="w-full h-full object-cover" /> : <Camera className="text-zinc-700 group-hover:text-emerald-500 transition-colors" size={32} />}
+                      {formData.avatar ? <img src={formData.avatar || null} className="w-full h-full object-cover" /> : <Camera className="text-zinc-700 group-hover:text-emerald-500 transition-colors" size={32} />}
                       <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" accept="image/*" />
                     </div>
                     <p className="text-[8px] font-black uppercase text-zinc-600 mt-2 tracking-widest">Foto de Perfil</p>
@@ -457,7 +457,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin, syncTrigger }) => {
         </div>
         
         <p className="mt-10 text-[8px] font-black text-zinc-800 uppercase tracking-[0.3em] text-center px-10 leading-relaxed">
-          Propriedade privada de dados • Liberdade Absoluta • TRIBO 2026
+          Propriedade privada de dados • Liberdade Absoluta • PÁGINAS 2026
         </p>
       </div>
     </div>

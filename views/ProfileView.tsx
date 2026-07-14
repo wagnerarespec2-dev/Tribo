@@ -31,6 +31,8 @@ import {
   MessageCircle,
   UserPlus,
   UserMinus,
+  UserCheck,
+  Rss,
   ArrowLeft,
   BellRing,
   Navigation,
@@ -52,6 +54,8 @@ import { UserDatabase } from '../services/db';
 import { SWManager, ServiceWorkerState } from '../services/swManager';
 import { FeedPost } from '../src/components/FeedPost';
 import { ConnectionStats } from '../src/components/ConnectionStats';
+import { EngagementStats } from '../src/components/EngagementStats';
+import { CameraCapture } from '../src/components/CameraCapture';
 
 interface ProfileProps {
   currentUser: User;
@@ -64,6 +68,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
   const navigate = useNavigate();
   
   const [tab, setTab] = useState<'posts' | 'social' | 'achievements' | 'stats' | 'launch' | 'security'>('social');
+  const [statsSubTab, setStatsSubTab] = useState<'wellbeing' | 'engagement'>('wellbeing');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -71,6 +76,8 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
   const [viewedUser, setViewedUser] = useState<User | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<'avatar' | 'cover' | null>(null);
   
   // Estado local para edição
   const [editData, setEditData] = useState<Partial<User>>({});
@@ -82,7 +89,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
   // Estados para Service Worker e Notificações Push
   const [swState, setSwState] = useState<ServiceWorkerState | null>(null);
   const [testNotifDelay, setTestNotifDelay] = useState(5);
-  const [testNotifTitle, setTestNotifTitle] = useState('Alerta da Tribo! 🚀');
+  const [testNotifTitle, setTestNotifTitle] = useState('Alerta do Páginas! 🚀');
   const [testNotifBody, setTestNotifBody] = useState('Esta é uma notificação em segundo plano da sua rede soberana!');
   const [isScheduling, setIsScheduling] = useState(false);
   const [isSubscribing, setIsSubscribing] = useState(false);
@@ -242,7 +249,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
       location: viewedUser.location,
       relationship: viewedUser.relationship || 'Solteiro(a)',
       education: viewedUser.education || 'Superior Completo',
-      occupation: viewedUser.occupation || 'Membro da Tribo',
+      occupation: viewedUser.occupation || 'Membro das Páginas',
       languages: viewedUser.languages || 'Português',
       interests: viewedUser.interests || 'Tecnologia, Liberdade',
       birthDate: viewedUser.birthDate || '',
@@ -298,7 +305,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
     if (updatedUser.pushNotificationsEnabled) {
        UserDatabase.triggerSystemNotification(
          "Identidade Atualizada",
-         "Suas notificações móveis da TRIBO agora estão ativas."
+         "Suas notificações móveis do PÁGINAS agora estão ativas."
        );
     }
   };
@@ -312,10 +319,24 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
 
   const handleRemove = () => {
     if (!viewedUser) return;
-    if (window.confirm("Deseja remover este aliado da sua rede?")) {
+    if (window.confirm("Deseja remover este amigo da sua rede?")) {
         UserDatabase.removeFriend(currentUser.id, viewedUser.id);
         if (onUpdate) onUpdate();
     }
+  };
+
+  const handleFollow = () => {
+    if (!viewedUser) return;
+    UserDatabase.followUser(currentUser.id, viewedUser.id);
+    if (onUpdate) onUpdate();
+    if (navigator.vibrate) navigator.vibrate(20);
+  };
+
+  const handleUnfollow = () => {
+    if (!viewedUser) return;
+    UserDatabase.unfollowUser(currentUser.id, viewedUser.id);
+    if (onUpdate) onUpdate();
+    if (navigator.vibrate) navigator.vibrate(20);
   };
 
   const handleGeolocation = () => {
@@ -422,11 +443,11 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
       const credential = await navigator.credentials.create({
         publicKey: {
           challenge: challenge,
-          rp: { name: "Tribo S/A", id: window.location.hostname },
+          rp: { name: "Páginas S/A", id: window.location.hostname },
           user: {
             id: userIdBytes,
-            name: viewedUser?.username || "tribo_user",
-            displayName: viewedUser?.name || "Aliado da Tribo"
+            name: viewedUser?.username || "paginas_user",
+            displayName: viewedUser?.name || "Amigo do Páginas"
           },
           pubKeyCredParams: [{ type: "public-key", alg: -7 }],
           authenticatorSelection: {
@@ -577,7 +598,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
   };
 
   const reputationBadge = useMemo(() => {
-    if (reputation >= 2000) return { label: 'Lenda da Tribo', icon: Crown, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' };
+    if (reputation >= 2000) return { label: 'Lenda do Páginas', icon: Crown, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/20' };
     if (reputation >= 1000) return { label: 'Influenciador', icon: Trophy, color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' };
     if (reputation >= 500) return { label: 'Membro Ativo', icon: Medal, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' };
     return { label: 'Iniciante', icon: Star, color: 'text-zinc-500', bg: 'bg-zinc-500/10', border: 'border-zinc-500/20' };
@@ -593,7 +614,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
       <div className="bg-zinc-900/40 border border-zinc-800 rounded-[4rem] overflow-hidden shadow-2xl relative">
         <div className="h-64 bg-zinc-950 relative overflow-hidden group/cover">
           {editData.coverImage || viewedUser.coverImage ? (
-            <img src={editData.coverImage || viewedUser.coverImage} className="w-full h-full object-cover" />
+            <img src={editData.coverImage || viewedUser.coverImage || null} className="w-full h-full object-cover" />
           ) : (
             <div className={`w-full h-full bg-gradient-to-br ${viewedUser.isFounder ? 'from-emerald-900/40 to-emerald-950' : 'from-zinc-900/40 to-zinc-950'} opacity-40 blur-sm`}></div>
           )}
@@ -601,11 +622,22 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
           
           {isEditing && (
             <div 
-              onClick={() => coverInputRef.current?.click()}
-              className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover/cover:opacity-100 transition-opacity z-20"
+              className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity z-20"
             >
-              <ImageIcon size={32} className="text-emerald-500 mb-2" />
-              <span className="text-[10px] font-black uppercase text-white tracking-widest">Alterar Capa</span>
+              <div className="flex items-center gap-4 bg-zinc-900/90 p-4 rounded-2xl border border-white/10 shadow-2xl">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); coverInputRef.current?.click(); }}
+                  className="px-4 py-2.5 bg-white/5 hover:bg-emerald-500 hover:text-black rounded-xl text-[10px] font-black uppercase tracking-wider text-white transition-all active:scale-95 border border-white/5"
+                >
+                  Upload de Capa
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setCameraTarget('cover'); setIsCameraOpen(true); }}
+                  className="px-4 py-2.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-black text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/10"
+                >
+                  Câmera
+                </button>
+              </div>
               <input type="file" ref={coverInputRef} onChange={handleCoverUpload} className="hidden" accept="image/*" />
             </div>
           )}
@@ -624,14 +656,24 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
           <div className="flex flex-col md:flex-row items-end justify-between gap-8">
             <div className="relative group">
               <div className={`w-44 h-44 rounded-[3.5rem] border-[12px] border-zinc-900 bg-zinc-800 overflow-hidden shadow-2xl relative ${viewedUser.status === UserStatus.ONLINE ? 'ring-4 ring-emerald-500/20' : ''}`}>
-                <img src={editData.avatar || viewedUser.avatar} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                <img src={editData.avatar || viewedUser.avatar || null} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                 {isEditing && (
                     <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity p-2"
                     >
-                        <Camera size={32} className="text-emerald-500 mb-2" />
-                        <span className="text-[8px] font-black uppercase text-white tracking-widest">Trocar Foto</span>
+                        <span className="text-[8px] font-black uppercase text-zinc-400 tracking-widest mb-1">Avatar</span>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                          className="w-full py-2 bg-white/5 hover:bg-emerald-500 hover:text-black rounded-xl text-[8px] font-black uppercase tracking-wider text-white transition-all active:scale-95 border border-white/5"
+                        >
+                          Upload
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setCameraTarget('avatar'); setIsCameraOpen(true); }}
+                          className="w-full py-2 bg-emerald-500/10 hover:bg-emerald-500 hover:text-black text-emerald-400 rounded-xl text-[8px] font-black uppercase tracking-wider transition-all active:scale-95 border border-emerald-500/10"
+                        >
+                          Câmera
+                        </button>
                         <input type="file" ref={fileInputRef} onChange={handleAvatarUpload} className="hidden" accept="image/*" />
                     </div>
                 )}
@@ -656,7 +698,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                 </div>
               )
             ) : (
-              <div className="flex gap-4">
+              <div className="flex gap-4 flex-wrap">
                 <button 
                   onClick={() => navigate('/chat')}
                   className="bg-zinc-800 hover:bg-zinc-700 text-white font-black px-8 py-4 rounded-[2rem] transition-all text-xs uppercase tracking-widest flex items-center gap-2"
@@ -665,11 +707,38 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                 </button>
                 {currentUser.friends.includes(viewedUser.id) ? (
                   <button onClick={handleRemove} className="bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500 hover:text-white text-rose-500 font-black px-8 py-4 rounded-[2rem] transition-all text-xs uppercase tracking-widest flex items-center gap-2">
-                    <UserMinus size={16} /> Remover
+                    <UserMinus size={16} /> Remover Amigo
+                  </button>
+                ) : UserDatabase.hasSentRequest(currentUser.id, viewedUser.id) ? (
+                  <button className="bg-zinc-850 border border-white/5 text-zinc-500 font-black px-8 py-4 rounded-[2rem] text-xs uppercase tracking-widest flex items-center gap-2 cursor-default" disabled>
+                    <UserPlus size={16} /> Pedido Pendente
                   </button>
                 ) : (
                   <button onClick={handleConnect} className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 py-4 rounded-[2rem] transition-all shadow-xl shadow-emerald-500/20 text-xs uppercase tracking-widest flex items-center gap-2">
-                    <UserPlus size={16} /> Conectar
+                    <UserPlus size={16} /> Adicionar Amigo
+                  </button>
+                )}
+                {currentUser.following?.includes(viewedUser.id) ? (
+                  <button onClick={handleUnfollow} className="bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500 hover:text-black text-amber-500 font-black px-8 py-4 rounded-[2rem] transition-all text-xs uppercase tracking-widest flex items-center gap-2">
+                    <UserCheck size={16} /> Seguindo
+                  </button>
+                ) : (
+                  <button onClick={handleFollow} className="bg-zinc-800 hover:bg-zinc-700 text-white font-black px-8 py-4 rounded-[2rem] transition-all text-xs uppercase tracking-widest flex items-center gap-2">
+                    <Rss size={16} /> Seguir
+                  </button>
+                )}
+                {(currentUser.username === 'Wagner' || currentUser.isFounder) && viewedUser.id !== currentUser.id && (
+                  <button 
+                    onClick={() => {
+                      if (window.confirm(`ATENÇÃO ADMINISTRADOR: Tem certeza que deseja excluir permanentemente a conta de ${viewedUser.name} (@${viewedUser.username}) e todos os seus dados?`)) {
+                        UserDatabase.deleteUser(viewedUser.id);
+                        alert(`Conta de ${viewedUser.name} excluída com sucesso!`);
+                        navigate('/feed');
+                      }
+                    }} 
+                    className="bg-rose-600 hover:bg-rose-500 text-white font-black px-8 py-4 rounded-[2rem] transition-all text-xs uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-rose-600/20 animate-pulse"
+                  >
+                    <Trash2 size={16} /> Excluir Conta (Admin)
                   </button>
                 )}
               </div>
@@ -698,6 +767,21 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                 @{viewedUser.username} • {viewedUser.age} anos
                 {viewedUser.gender && viewedUser.gender !== 'Não informar' && ` • ${viewedUser.gender}`}
               </p>
+
+              <div className="flex gap-6 mt-4 text-xs font-bold text-zinc-400">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white font-black text-sm">{viewedUser.friends.length}</span>
+                  <span className="text-zinc-500 font-medium text-xs">Amigos</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white font-black text-sm">{viewedUser.following?.length || 0}</span>
+                  <span className="text-zinc-500 font-medium text-xs">Seguindo</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white font-black text-sm">{viewedUser.followers?.length || 0}</span>
+                  <span className="text-zinc-500 font-medium text-xs">Seguidores</span>
+                </div>
+              </div>
               
               <div className="mt-8">
                 {isEditing ? (
@@ -705,10 +789,10 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                     value={editData.bio || ''} 
                     onChange={e => setEditData({...editData, bio: e.target.value})}
                     className="w-full bg-zinc-950 border border-emerald-500/20 rounded-[2rem] p-6 text-zinc-300 text-lg font-medium outline-none focus:border-emerald-500 transition-all h-32 resize-none shadow-inner"
-                    placeholder="Conte sua história na Tribo..."
+                    placeholder="Conte sua história no Páginas..."
                   />
                 ) : (
-                  <p className="text-zinc-300 text-xl font-medium leading-relaxed max-w-2xl">{viewedUser.bio || 'Membro da TRIBO.'}</p>
+                  <p className="text-zinc-300 text-xl font-medium leading-relaxed max-w-2xl">{viewedUser.bio || 'Membro do PÁGINAS.'}</p>
                 )}
               </div>
             </div>
@@ -841,7 +925,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                           className="w-full bg-black/40 border border-white/5 rounded-2xl py-4 px-6 text-sm font-black text-white outline-none focus:border-emerald-500/40 shadow-inner"
                         />
                       ) : (
-                        <span className="text-lg font-black text-zinc-200 tracking-tight">{viewedUser.occupation || 'Membro da Tribo'}</span>
+                        <span className="text-lg font-black text-zinc-200 tracking-tight">{viewedUser.occupation || 'Membro do Páginas'}</span>
                       )}
                     </div>
 
@@ -916,7 +1000,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                    <Shield className="text-emerald-500 shrink-0" size={48} />
                    <div>
                       <h4 className="font-black text-white italic tracking-tight uppercase mb-2">Protocolo de Soberania</h4>
-                      <p className="text-[10px] font-black text-zinc-500 uppercase leading-relaxed tracking-widest">A identidade na TRIBO é soberana. Cada dado compartilhado aqui é de propriedade total do membro. Nossos protocolos de 2026 garantem a integridade desta página.</p>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase leading-relaxed tracking-widest">A identidade no PÁGINAS é soberana. Cada dado compartilhado aqui é de propriedade total do membro. Nossos protocolos de 2026 garantem a integridade desta página.</p>
                    </div>
                 </div>
 
@@ -1135,7 +1219,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
               
               <div className="space-y-6">
                   <div className="bg-zinc-900/40 border border-zinc-800 rounded-[3rem] p-10 shadow-xl relative overflow-hidden group">
-                    <h4 className="font-black text-xs uppercase tracking-[0.3em] text-zinc-600 mb-8 flex items-center gap-2 relative z-10"><Users size={16}/> Aliados Recentes</h4>
+                    <h4 className="font-black text-xs uppercase tracking-[0.3em] text-zinc-600 mb-8 flex items-center gap-2 relative z-10"><Users size={16}/> Amigos Recentes</h4>
                     <div className="grid grid-cols-2 gap-4 relative z-10">
                       {viewedUser.friends.length > 0 ? viewedUser.friends.slice(0, 4).map(fid => {
                         const f = UserDatabase.findById(fid);
@@ -1145,12 +1229,12 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                             onClick={() => navigate(`/profile/${f.id}`)}
                             className="aspect-square rounded-2xl bg-zinc-950 border border-zinc-800 overflow-hidden group/f hover:border-emerald-500/40 transition-all shadow-inner relative cursor-pointer"
                           >
-                            <img src={f.avatar} className="w-full h-full object-cover group-hover/f:scale-110 transition-transform duration-700" />
+                            <img src={f.avatar || null} className="w-full h-full object-cover group-hover/f:scale-110 transition-transform duration-700" />
                           </div>
                         ) : null;
                       }) : (
                         <div className="col-span-2 py-8 text-center bg-black/20 rounded-2xl border border-dashed border-zinc-800">
-                           <span className="text-[8px] font-black uppercase text-zinc-700">Ainda sem aliados</span>
+                           <span className="text-[8px] font-black uppercase text-zinc-700">Ainda sem amigos</span>
                         </div>
                       )}
                     </div>
@@ -1187,7 +1271,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
           {tab === 'achievements' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                { title: 'Identidade TRIBO', icon: Shield, desc: 'Membro Verificado', color: 'text-amber-400', bg: 'bg-amber-400/10' },
+                { title: 'Identidade PÁGINAS', icon: Shield, desc: 'Membro Verificado', color: 'text-amber-400', bg: 'bg-amber-400/10' },
                 { title: reputationBadge.label, icon: reputationBadge.icon, desc: `${reputation} reputação`, color: reputationBadge.color, bg: reputationBadge.bg },
                 { title: `Nv. ${level}`, icon: Zap, desc: `${xpPercentage}% do progresso`, color: 'text-emerald-500', bg: 'bg-emerald-500/10' }
               ].map((ach, i) => (
@@ -1203,7 +1287,29 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
           )}
 
           {tab === 'stats' && (
-            <ConnectionStats user={viewedUser} />
+            <div className="space-y-8 animate-in fade-in duration-300">
+              {/* Selector de sub-abas de estatísticas */}
+              <div className="flex bg-zinc-950 p-1.5 rounded-3xl border border-white/5 w-fit">
+                <button 
+                  onClick={() => setStatsSubTab('wellbeing')}
+                  className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${statsSubTab === 'wellbeing' ? 'bg-zinc-800 text-emerald-400 shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  🔋 Tempo de Tela
+                </button>
+                <button 
+                  onClick={() => setStatsSubTab('engagement')}
+                  className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${statsSubTab === 'engagement' ? 'bg-zinc-800 text-emerald-400 shadow-lg' : 'text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  📈 Engajamento no Páginas
+                </button>
+              </div>
+
+              {statsSubTab === 'wellbeing' ? (
+                <ConnectionStats user={viewedUser} />
+              ) : (
+                <EngagementStats user={viewedUser} />
+              )}
+            </div>
           )}
 
           {tab === 'launch' && (
@@ -1220,7 +1326,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                   </span>
                   <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-4 italic uppercase leading-none">Console de Preparação</h2>
                   <p className="text-zinc-400 font-medium text-sm leading-relaxed mb-6">
-                    Este é o centro de controle da soberania para preparar a <span className="text-white font-bold">TRIBO</span> para o público global. Realize diagnósticos em tempo real, limpe caches ou recrie do absoluto zero todo o banco de dados local com sementes padrão perfeitamente formatadas para teste.
+                    Este é o centro de controle da soberania para preparar o <span className="text-white font-bold">PÁGINAS</span> para o público global. Realize diagnósticos em tempo real, limpe caches ou recrie do absoluto zero todo o banco de dados local com sementes padrão perfeitamente formatadas para teste.
                   </p>
                 </div>
               </div>
@@ -1270,7 +1376,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                       <Zap size={14} className="text-rose-500" /> Saneamento Geral
                     </h3>
                     <p className="text-xs font-medium text-zinc-500 leading-relaxed mb-6">
-                      Se você encontrar quaisquer inconsistências durante seus testes ou quiser iniciar os testes com as sementes perfeitamente limpas, use a ação nuclear abaixo. Ela apagará todas as modificações temporárias do navegador e redefinirá a TRIBO imediatamente para o estado limpo inicial.
+                      Se você encontrar quaisquer inconsistências durante seus testes ou quiser iniciar os testes com as sementes perfeitamente limpas, use a ação nuclear abaixo. Ela apagará todas as modificações temporárias do navegador e redefinirá o PÁGINAS imediatamente para o estado limpo inicial.
                     </p>
                   </div>
 
@@ -1279,7 +1385,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                       onClick={() => {
                         if (window.confirm("Nuclear Alert: Tem certeza de que quer limpar TODO o banco de dados local do app? Todas as postagens, transações, chats e usuários criados serão zerados.")) {
                           UserDatabase.wipeAllData();
-                          alert("Banco de dados local limpo com sucesso! A TRIBO está totalmente limpa e pronta para receber o cadastro do primeiro usuário (Fundador/Admin).");
+                          alert("Banco de dados local limpo com sucesso! O PÁGINAS está totalmente limpo e pronto para receber o cadastro do primeiro usuário (Fundador/Admin).");
                           window.location.reload();
                         }
                       }}
@@ -1301,7 +1407,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                           alert(`Sucesso! Um convite de conexão do criador ${founder.name} foi enviado para você. Verifique sua aba de Notificações!`);
                           if (onUpdate) onUpdate();
                         } else {
-                          alert("A solicitação de amizade já está ativa ou vocês já são aliados de rede.");
+                          alert("A solicitação de amizade já está ativa ou vocês já são amigos de rede.");
                         }
                       }}
                       className="w-full bg-zinc-950 hover:bg-zinc-850 border border-white/5 text-zinc-300 font-black py-4 px-6 rounded-[2rem] text-[10px] uppercase tracking-widest cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-2"
@@ -1315,7 +1421,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                         const founder = UserDatabase.getFounder();
                         const systemNotif = {
                           id: Math.random().toString(36).substr(2, 9),
-                          message: "Lançamento TRIBO! Seu aplicativo e conexões locais estão 100% íntegros e criptografados no cliente.",
+                          message: "Lançamento PÁGINAS! Seu aplicativo e conexões locais estão 100% íntegros e criptografados no cliente.",
                           senderAvatar: founder?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=founder',
                           timestamp: 'Agora mesmo',
                           read: false
@@ -1344,8 +1450,8 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {[
                     { number: 'T01', title: 'Feed & Mídias', status: 'PRONTO PARA PRODUÇÃO', desc: 'Criação de postagens em formato de texto e vídeo, curtidas, comentários encadeados estruturados.' },
-                    { number: 'T02', title: 'Roça Virtu-Ativa', status: 'TESTADO E CONFIGURADO', desc: 'Game engine de rotação de plantio (plots), irrigação sustentável com poço profundo e colheita.' },
-                    { number: 'T03', title: 'Segurança & Chat', status: 'CRIPTOGRAFADO LOCAL', desc: 'Conexões diretas e nudges de atenção integrados no app Tribo Papo, livre de intermediários.' }
+                    { number: 'T02', title: 'Fazenda Virtu-Ativa', status: 'TESTADO E CONFIGURADO', desc: 'Game engine de rotação de plantio (plots), irrigação sustentável com poço profundo e colheita.' },
+                    { number: 'T03', title: 'Segurança & Chat', status: 'CRIPTOGRAFADO LOCAL', desc: 'Conexões diretas e nudges de atenção integrados no app Páginas Papo, livre de intermediários.' }
                   ].map((test, index) => (
                     <div key={index} className="bg-black/20 border border-white/5 rounded-[2rem] p-6 space-y-3">
                       <div className="flex justify-between items-center">
@@ -1375,7 +1481,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                   </span>
                   <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-4 italic uppercase leading-none">Segurança & Privacidade</h2>
                   <p className="text-zinc-400 font-medium text-sm leading-relaxed">
-                    Sua identidade digital na <span className="text-white font-bold">TRIBO</span> pertence exclusivamente a você. Controle quais dados você deseja expor para aplicações parceiras e gerencie suas diretrizes de invisibilidade permanente a qualquer momento.
+                    Sua identidade digital no <span className="text-white font-bold">PÁGINAS</span> pertence exclusivamente a você. Controle quais dados você deseja expor para aplicações parceiras e gerencie suas diretrizes de invisibilidade permanente a qualquer momento.
                   </p>
                 </div>
               </div>
@@ -1454,7 +1560,7 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
                 </div>
 
                 <p className="text-xs text-zinc-400 font-medium leading-relaxed">
-                  Ao ativar o <span className="text-rose-400 font-bold">Modo Invisível Permanente</span>, seu perfil é configurado permanentemente como <span className="text-rose-400 font-bold">Offline</span> por padrão. Sua geolocalização e sua presença ativa no radar serão congeladas e ocultadas de todos os outros aliados, independentemente das configurações do menu flutuante. Você poderá navegar de forma anônima e invisível por toda a rede.
+                  Ao ativar o <span className="text-rose-400 font-bold">Modo Invisível Permanente</span>, seu perfil é configurado permanentemente como <span className="text-rose-400 font-bold">Offline</span> por padrão. Sua geolocalização e sua presença ativa no radar serão congeladas e ocultadas de todos os outros amigos, independentemente das configurações do menu flutuante. Você poderá navegar de forma anônima e invisível por toda a rede.
                 </p>
               </div>
 
@@ -1740,6 +1846,25 @@ const ProfileView: React.FC<ProfileProps> = ({ currentUser, onUpdate, syncTrigge
           )}
          </div>
       </div>
+
+      {isCameraOpen && (
+        <CameraCapture 
+          onCapture={(base64) => {
+            if (cameraTarget === 'avatar') {
+              setEditData(prev => ({ ...prev, avatar: base64 }));
+            } else if (cameraTarget === 'cover') {
+              setEditData(prev => ({ ...prev, coverImage: base64 }));
+            }
+            setIsCameraOpen(false);
+            setCameraTarget(null);
+          }}
+          onClose={() => {
+            setIsCameraOpen(false);
+            setCameraTarget(null);
+          }}
+          aspectRatio={cameraTarget === 'avatar' ? '1:1' : 'free'}
+        />
+      )}
     </div>
   );
 };

@@ -393,7 +393,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ currentUser, onUpdat
                             onClick={() => handleSelectPerson(p.id)}
                             className="flex items-center gap-3 p-3 bg-white/5 hover:bg-white/10 rounded-2xl cursor-pointer transition-all border border-white/5"
                           >
-                            <img src={p.avatar} className="w-8 h-8 rounded-xl object-cover shrink-0" />
+                            <img src={p.avatar || null} className="w-8 h-8 rounded-xl object-cover shrink-0" />
                             <div className="overflow-hidden">
                               <p className="text-xs font-black text-white truncate">{p.name}</p>
                               <p className="text-[9px] font-bold text-zinc-500 truncate">@{p.username}</p>
@@ -432,7 +432,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ currentUser, onUpdat
                                 className="p-5 bg-white/5 hover:bg-white/10 rounded-[2rem] cursor-pointer border border-white/5 flex gap-4 transition-all duration-300 hover:scale-[1.01]"
                               >
                                 <div className="relative shrink-0">
-                                  <img src={u.avatar} className="w-12 h-12 rounded-2xl object-cover" />
+                                  <img src={u.avatar || null} className="w-12 h-12 rounded-2xl object-cover" />
                                   <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-black ${
                                     u.status === 'ONLINE' ? 'bg-emerald-500' :
                                     u.status === 'BUSY' ? 'bg-rose-500' : 'bg-zinc-600'
@@ -524,7 +524,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ currentUser, onUpdat
                               >
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-3">
-                                    <img src={post.authorAvatar} className="w-8 h-8 rounded-xl object-cover shrink-0" />
+                                    <img src={post.authorAvatar || null} className="w-8 h-8 rounded-xl object-cover shrink-0" />
                                     <div>
                                       <p className="text-xs font-extrabold text-white">{highlightText(post.authorName, query)}</p>
                                       <p className="text-[9px] font-medium text-zinc-500 mt-0.5">{post.timestamp}</p>
@@ -584,7 +584,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ currentUser, onUpdat
               {/* Header do Post */}
               <div className="p-6 border-b border-white/5 flex items-center justify-between bg-zinc-950/40">
                 <div className="flex items-center gap-3">
-                  <img src={selectedPost.authorAvatar} className="w-10 h-10 rounded-2xl object-cover" />
+                  <img src={selectedPost.authorAvatar || null} className="w-10 h-10 rounded-2xl object-cover" />
                   <div>
                     <h4 className="text-xs font-extrabold text-white">{selectedPost.authorName}</h4>
                     <p className="text-[9px] font-bold text-zinc-500 mt-0.5">{selectedPost.timestamp}</p>
@@ -626,7 +626,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ currentUser, onUpdat
                     <div className="space-y-4">
                       {selectedPost.comments.map(comment => (
                         <div key={comment.id} className="p-4 bg-white/5 border border-white/5 rounded-[2rem] flex gap-3">
-                          <img src={comment.authorAvatar} className="w-8 h-8 rounded-xl object-cover shrink-0" />
+                          <img src={comment.authorAvatar || null} className="w-8 h-8 rounded-xl object-cover shrink-0" />
                           <div className="min-w-0">
                             <span className="text-xs font-extrabold text-white mr-1.5">{comment.authorName}</span>
                             <span className="text-[9px] text-zinc-500">{comment.timestamp}</span>

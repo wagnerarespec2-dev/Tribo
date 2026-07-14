@@ -122,7 +122,7 @@ const ChatView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             >
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <img src={currentUser.avatar} className="w-12 h-12 rounded-xl object-cover" />
+                  <img src={currentUser.avatar || null} className="w-12 h-12 rounded-xl object-cover" />
                   <div className="absolute -bottom-1 -right-1"><StatusMarker status={currentUser.status} size={10} /></div>
                 </div>
                 <div className="min-w-0 flex-grow">
@@ -211,7 +211,7 @@ const ChatView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                 className={`p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all ${isActive ? 'bg-emerald-500/10' : 'hover:bg-white/5'}`}
               >
                 <div className="relative">
-                  <img src={friend?.avatar} className="w-10 h-10 rounded-xl object-cover" />
+                  <img src={friend?.avatar || null} className="w-10 h-10 rounded-xl object-cover" />
                   <div className="absolute -bottom-1 -right-1"><StatusMarker status={friend?.status || UserStatus.OFFLINE} size={8} /></div>
                 </div>
                 <div className="min-w-0">
@@ -230,7 +230,7 @@ const ChatView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             <div className="flex items-center gap-3">
               <button onClick={() => setActiveConvId(null)} className="md:hidden p-2 -ml-2 text-zinc-500"><ChevronLeft size={20}/></button>
               <div className="relative">
-                <img src={targetUser?.avatar} className="w-10 h-10 rounded-xl object-cover" />
+                <img src={targetUser?.avatar || null} className="w-10 h-10 rounded-xl object-cover" />
                 <div className="absolute -bottom-1 -right-1"><StatusMarker status={targetUser?.status || UserStatus.OFFLINE} size={8} /></div>
               </div>
               <div>

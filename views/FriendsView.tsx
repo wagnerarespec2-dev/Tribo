@@ -48,11 +48,13 @@ interface FriendsViewProps {
 
 const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTrigger }) => {
   const navigate = useNavigate();
+  const [refreshKey, setRefreshKey] = useState(0);
+  const activeUser = useMemo(() => UserDatabase.findById(currentUser.id) || currentUser, [currentUser, refreshKey]);
+  const [socialTab, setSocialTab] = useState<'aliados' | 'seguindo' | 'seguidores'>('aliados');
   const [searchTerm, setSearchTerm] = useState('');
   const [friendSearchTerm, setFriendSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
   const [inviteTab, setInviteTab] = useState<'recebidos' | 'enviados'>('recebidos');
   
   const [mainTab, setMainTab] = useState<'conexoes' | 'radar'>('conexoes');
@@ -301,33 +303,51 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
   };
 
   const incomingRequests = useMemo(() => {
-    return currentUser.friendRequests
+    return activeUser.friendRequests
       .map(req => ({ ...req, sender: UserDatabase.findById(req.fromId) }))
       .filter(r => r.sender);
-  }, [currentUser.friendRequests, refreshKey]);
+  }, [activeUser.friendRequests, refreshKey]);
 
   const sentRequests = useMemo(() => {
     return UserDatabase.getUsers()
-      .filter(u => u.friendRequests.some(r => r.fromId === currentUser.id))
+      .filter(u => u.friendRequests.some(r => r.fromId === activeUser.id))
       .map(u => ({ 
         target: u, 
-        timestamp: u.friendRequests.find(r => r.fromId === currentUser.id)?.timestamp 
+        timestamp: u.friendRequests.find(r => r.fromId === activeUser.id)?.timestamp 
       }));
-  }, [refreshKey, currentUser.id]);
+  }, [refreshKey, activeUser.id]);
 
   const friendsList = useMemo(() => {
-    return currentUser.friends
+    return activeUser.friends
       .map(id => UserDatabase.findById(id))
       .filter(f => f) as User[];
-  }, [currentUser.friends, refreshKey]);
+  }, [activeUser.friends, refreshKey]);
 
-  const filteredFriends = useMemo(() => {
-    if (!friendSearchTerm.trim()) return friendsList;
+  const followingList = useMemo(() => {
+    return (activeUser.following || [])
+      .map(id => UserDatabase.findById(id))
+      .filter(f => f) as User[];
+  }, [activeUser.following, refreshKey]);
+
+  const followersList = useMemo(() => {
+    return (activeUser.followers || [])
+      .map(id => UserDatabase.findById(id))
+      .filter(f => f) as User[];
+  }, [activeUser.followers, refreshKey]);
+
+  const activeSocialList = useMemo(() => {
+    if (socialTab === 'aliados') return friendsList;
+    if (socialTab === 'seguindo') return followingList;
+    return followersList;
+  }, [socialTab, friendsList, followingList, followersList]);
+
+  const filteredSocialList = useMemo(() => {
+    if (!friendSearchTerm.trim()) return activeSocialList;
     const term = friendSearchTerm.toLowerCase();
-    return friendsList.filter(f =>
+    return activeSocialList.filter(f =>
       f.name.toLowerCase().includes(term) || f.username.toLowerCase().includes(term)
     );
-  }, [friendsList, friendSearchTerm]);
+  }, [activeSocialList, friendSearchTerm]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-12 animate-in fade-in duration-700 pb-24 px-4">
@@ -399,7 +419,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                    <div key={user.id} className="flex-none w-72 bg-zinc-900/40 border border-white/5 rounded-[3.5rem] p-10 flex flex-col items-center text-center group hover:border-emerald-500/30 transition-all duration-500 shadow-2xl snap-center font-bold">
                       <div className="relative mb-8">
                         <div className="w-28 h-28 rounded-[2.8rem] overflow-hidden border-4 border-zinc-800 group-hover:scale-110 transition-transform duration-700 shadow-2xl cursor-pointer" onClick={() => navigate(`/profile/${user.id}`)}>
-                           <img src={user.avatar} className="w-full h-full object-cover" alt="" />
+                           <img src={user.avatar || null} className="w-full h-full object-cover" alt="" />
                         </div>
                         <div className="absolute -bottom-1 -right-1 bg-zinc-950 p-1.5 rounded-full border-2 border-zinc-800 font-bold">
                           <StatusMarker status={user.status} size={10} />
@@ -526,7 +546,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                   incomingRequests.length > 0 ? incomingRequests.map((req, idx) => (
                     <div key={idx} className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-8 flex items-center justify-between group hover:border-emerald-500/20 transition-all shadow-2xl animate-in slide-in-from-left duration-500">
                       <div className="flex items-center gap-5 cursor-pointer" onClick={() => navigate(`/profile/${req.sender?.id}`)}>
-                        <img src={req.sender?.avatar} className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800" />
+                        <img src={req.sender?.avatar || null} className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800" />
                         <div>
                           <p className="font-black text-sm text-white truncate w-24 leading-none">@{req.sender?.username}</p>
                           <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mt-1 block">Recebido agora</span>
@@ -542,7 +562,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                   sentRequests.length > 0 ? sentRequests.map((req, idx) => (
                     <div key={idx} className="bg-zinc-900/40 border border-white/5 rounded-[2.5rem] p-8 flex items-center justify-between group hover:border-amber-500/20 transition-all shadow-2xl">
                       <div className="flex items-center gap-5 cursor-pointer" onClick={() => navigate(`/profile/${req.target?.id}`)}>
-                        <img src={req.target?.avatar} className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800" />
+                        <img src={req.target?.avatar || null} className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800" />
                         <div>
                           <p className="font-black text-sm text-white truncate w-24">@{req.target?.username}</p>
                           <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest mt-1 block">Aguardando aceite</span>
@@ -555,10 +575,35 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
               </div>
             </div>
 
-            {/* Lista de Aliados */}
+            {/* Lista de Aliados / Seguidores / Seguindo */}
             <div className="lg:col-span-2 space-y-8">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6">
-                <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-600">Minha Aliança Social ({filteredFriends.length})</h3>
+                <div className="flex bg-zinc-950/80 p-1.5 rounded-2xl border border-white/5 gap-1 shadow-inner flex-wrap">
+                  <button
+                    onClick={() => setSocialTab('aliados')}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                      socialTab === 'aliados' ? 'bg-zinc-800 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    Aliados ({friendsList.length})
+                  </button>
+                  <button
+                    onClick={() => setSocialTab('seguindo')}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                      socialTab === 'seguindo' ? 'bg-zinc-800 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    Seguindo ({followingList.length})
+                  </button>
+                  <button
+                    onClick={() => setSocialTab('seguidores')}
+                    className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                      socialTab === 'seguidores' ? 'bg-zinc-800 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    Seguidores ({followersList.length})
+                  </button>
+                </div>
                 <div className="relative w-full max-w-xs">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">
                     <Search size={14} />
@@ -581,7 +626,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {filteredFriends.map(friend => (
+                {filteredSocialList.map(friend => (
                   <div key={friend.id} className="bg-zinc-900/40 border border-white/5 rounded-[3.5rem] p-8 flex items-center justify-between group hover:border-emerald-500/30 transition-all duration-700 shadow-2xl relative overflow-hidden">
                      <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-5 transition-opacity">
                        <ShieldCheck size={100} className="text-emerald-500" />
@@ -591,7 +636,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                       onClick={() => navigate(`/profile/${friend.id}`)}
                      >
                         <div className="relative">
-                          <img src={friend.avatar} className="w-20 h-20 rounded-[2rem] object-cover border-2 border-zinc-800 group-hover:border-emerald-500/40 transition-colors" />
+                          <img src={friend.avatar || null} className="w-20 h-20 rounded-[2rem] object-cover border-2 border-zinc-800 group-hover:border-emerald-500/40 transition-colors" />
                           <div className="absolute -bottom-1 -right-1 bg-zinc-950 p-1 rounded-full border-2 border-zinc-800">
                             <StatusMarker status={friend.status} size={10} />
                           </div>
@@ -615,20 +660,43 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                      </div>
                      <div className="flex flex-col gap-2 relative z-10">
                         <button onClick={() => navigate('/chat')} className="p-4 bg-zinc-950 text-zinc-500 rounded-2xl hover:text-emerald-500 hover:bg-emerald-500/5 transition-all shadow-inner"><MessageCircle size={22} /></button>
-                        <button onClick={() => { if(window.confirm("Romper aliança?")) { UserDatabase.removeFriend(currentUser.id, friend.id); triggerRefresh(); } }} className="p-4 bg-zinc-950 text-zinc-500 rounded-2xl hover:text-rose-500 hover:bg-rose-500/5 transition-all shadow-inner"><UserMinus size={22} /></button>
+                        
+                        {socialTab === 'aliados' && (
+                          <button onClick={(e) => { e.stopPropagation(); if(window.confirm("Romper aliança?")) { UserDatabase.removeFriend(currentUser.id, friend.id); triggerRefresh(); } }} className="p-4 bg-zinc-950 text-zinc-500 rounded-2xl hover:text-rose-500 hover:bg-rose-500/5 transition-all shadow-inner" title="Romper aliança"><UserMinus size={22} /></button>
+                        )}
+
+                        {socialTab === 'seguindo' && (
+                          <button onClick={(e) => { e.stopPropagation(); UserDatabase.unfollowUser(currentUser.id, friend.id); triggerRefresh(); }} className="p-4 bg-zinc-950 text-zinc-500 rounded-2xl hover:text-rose-500 hover:bg-rose-500/5 transition-all shadow-inner" title="Deixar de seguir"><UserMinus size={22} /></button>
+                        )}
+
+                        {socialTab === 'seguidores' && (
+                          !activeUser.following?.includes(friend.id) ? (
+                            <button onClick={(e) => { e.stopPropagation(); UserDatabase.followUser(currentUser.id, friend.id); triggerRefresh(); }} className="p-4 bg-zinc-950 text-zinc-500 rounded-2xl hover:text-emerald-500 hover:bg-emerald-500/5 transition-all shadow-inner" title="Seguir de volta"><UserPlus size={22} /></button>
+                          ) : (
+                            <button onClick={(e) => { e.stopPropagation(); UserDatabase.unfollowUser(currentUser.id, friend.id); triggerRefresh(); }} className="p-4 bg-zinc-950 text-emerald-500/50 rounded-2xl hover:text-rose-500 hover:bg-rose-500/5 transition-all shadow-inner" title="Deixar de seguir"><UserMinus size={22} /></button>
+                          )
+                        )}
                      </div>
                   </div>
                 ))}
-                {filteredFriends.length === 0 && (
+                {filteredSocialList.length === 0 && (
                   <div className="col-span-full py-32 text-center bg-zinc-900/10 rounded-[5rem] border-4 border-dashed border-white/5 flex flex-col items-center">
                     <Compass size={64} className="text-zinc-800 mb-8" />
                     <p className="text-xl font-black text-zinc-650 tracking-tight uppercase">
-                      {friendSearchTerm.trim() ? "Nenhum aliado encontrado" : "Sua rede está vazia"}
+                      {friendSearchTerm.trim() 
+                        ? "Nenhum resultado encontrado" 
+                        : socialTab === 'aliados' 
+                          ? "Sua rede de aliados está vazia" 
+                          : socialTab === 'seguindo' 
+                            ? "Você não segue ninguém ainda" 
+                            : "Você não possui seguidores ainda"}
                     </p>
                     <p className="text-[10px] font-black text-zinc-550 uppercase tracking-widest mt-4 max-w-xs leading-relaxed">
                       {friendSearchTerm.trim() 
                         ? `Limpe ou ajuste os termos para encontrar "${friendSearchTerm}".`
-                        : "Explore as sugestões ou use a busca acima para encontrar seus primeiros aliados."}
+                        : socialTab === 'aliados' 
+                          ? "Explore as sugestões ou use a busca acima para encontrar seus primeiros aliados."
+                          : "Encontre membros interessantes e comece a segui-los para receber novidades."}
                     </p>
                   </div>
                 )}
@@ -973,7 +1041,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                         }}
                       >
                         <div className="absolute w-4 h-4 bg-emerald-500/30 rounded-full animate-ping opacity-60"></div>
-                        <img src={l.userAvatar} className="w-5 h-5 rounded-full object-cover border border-emerald-500 relative z-10 transition-transform group-hover:scale-125" />
+                        <img src={l.userAvatar || null} className="w-5 h-5 rounded-full object-cover border border-emerald-500 relative z-10 transition-transform group-hover:scale-125" />
                       </div>
                     );
                   })}
@@ -996,7 +1064,7 @@ const FriendsView: React.FC<FriendsViewProps> = ({ currentUser, onUpdate, syncTr
                     >
                       <div className="flex items-center gap-5">
                         <div className="relative">
-                          <img src={sig.userAvatar} className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800" />
+                          <img src={sig.userAvatar || null} className="w-14 h-14 rounded-2xl object-cover border-2 border-zinc-800" />
                           <div className="absolute -bottom-1 -right-1">
                             <Circle size={10} className="text-emerald-500 fill-emerald-500 animate-pulse animate-duration-500" />
                           </div>
@@ -1121,7 +1189,7 @@ const MemberCard: React.FC<{ user: User; currentUser: User; onSendRequest: (id: 
         onClick={() => navigate(`/profile/${user.id}`)}
       >
         <div className="relative animate-in">
-           <img src={user.avatar} className="w-16 h-16 rounded-[1.8rem] object-cover border-2 border-zinc-800" />
+           <img src={user.avatar || null} className="w-16 h-16 rounded-[1.8rem] object-cover border-2 border-zinc-800" />
            <div className="absolute -bottom-1 -right-1"><StatusMarker status={user.status} size={10} /></div>
         </div>
         <div>

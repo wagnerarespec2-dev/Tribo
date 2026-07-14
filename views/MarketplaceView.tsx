@@ -252,7 +252,7 @@ const MarketplaceView: React.FC<MarketplaceViewProps> = ({ currentUser, syncTrig
             className={`group bg-zinc-900/40 border border-white/5 rounded-[3.5rem] overflow-hidden hover:border-emerald-500/30 transition-all duration-700 cursor-pointer flex flex-col shadow-2xl hover:-translate-y-2 ${product.status === 'sold' ? 'opacity-75' : ''}`}
           >
              <div className="aspect-[4/5] relative overflow-hidden bg-zinc-950">
-               <img src={product.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 opacity-90 group-hover:opacity-100" />
+               <img src={product.image || null} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 opacity-90 group-hover:opacity-100" />
                <div className="absolute top-6 left-6 flex flex-col gap-2">
                  {product.status === 'sold' ? (
                    <div className="bg-rose-500 text-white px-5 py-2.5 rounded-2xl text-xl font-black border border-rose-400 shadow-2xl uppercase tracking-tighter">
@@ -326,7 +326,7 @@ const MarketplaceView: React.FC<MarketplaceViewProps> = ({ currentUser, syncTrig
               <button onClick={() => setSelectedProduct(null)} className="absolute top-8 right-8 z-50 p-4 bg-black/60 text-white rounded-2xl backdrop-blur-xl border border-white/10 hover:bg-emerald-500 hover:text-black transition-all"><X size={24}/></button>
               
               <div className="w-full md:w-1/2 aspect-square md:aspect-auto bg-zinc-950 flex items-center justify-center">
-                 <img src={selectedProduct.image} className="w-full h-full object-contain" />
+                 <img src={selectedProduct.image || null} className="w-full h-full object-contain" />
               </div>
 
               <div className="w-full md:w-1/2 p-10 md:p-16 overflow-y-auto scrollbar-hide flex flex-col">
@@ -448,7 +448,7 @@ const MarketplaceView: React.FC<MarketplaceViewProps> = ({ currentUser, syncTrig
                    className={`aspect-video rounded-[3rem] border-4 border-dashed transition-all flex flex-col items-center justify-center cursor-pointer overflow-hidden ${formData.image ? 'border-emerald-500' : 'border-zinc-800 hover:border-emerald-500/40 bg-zinc-950'}`}
                  >
                     {formData.image ? (
-                      <img src={formData.image} className="w-full h-full object-cover" />
+                      <img src={formData.image || null} className="w-full h-full object-cover" />
                     ) : (
                       <div className="text-center p-8">
                         <Camera size={48} className="text-zinc-800 mb-4 mx-auto" />

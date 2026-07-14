@@ -34,6 +34,7 @@ import { IdentityType, User, AppNotification } from './types';
 import { UserDatabase } from './services/db';
 import { SWManager } from './services/swManager';
 import { SyncClient } from './services/syncClient';
+import { GlobalSearch } from './src/components/GlobalSearch';
 
 const TopHeader: React.FC<{ 
   currentUser: User; 
@@ -42,7 +43,8 @@ const TopHeader: React.FC<{
   onStartTour?: () => void;
   currentTheme: 'light' | 'dark' | 'nostalgia';
   onToggleTheme: () => void;
-}> = ({ currentUser, isIncognito, onToggleIncognito, onStartTour, currentTheme, onToggleTheme }) => {
+  onUpdate?: () => void;
+}> = ({ currentUser, isIncognito, onToggleIncognito, onStartTour, currentTheme, onToggleTheme, onUpdate }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -64,14 +66,15 @@ const TopHeader: React.FC<{
     <div className="fixed top-0 left-0 right-0 z-50 bg-[var(--msn-sidebar)] backdrop-blur-2xl border-b border-white/5 pt-safe transition-colors duration-300">
       <div className="h-16 px-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <NavLink to="/" className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center font-black text-black italic text-xl shadow-lg shadow-emerald-500/20">T</NavLink>
+          <NavLink to="/" className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center font-black text-black italic text-xl shadow-lg shadow-emerald-500/20">P</NavLink>
           <div className="flex flex-col">
-            <span className="font-black tracking-tighter text-lg leading-none">TRIBO</span>
+            <span className="font-black tracking-tighter text-lg leading-none">PÁGINAS</span>
             {isSyncing && <span className="text-[7px] font-black text-emerald-500 uppercase flex items-center gap-1 mt-0.5"><Wifi size={8}/> Sincronizando...</span>}
           </div>
         </div>
         
         <div className="flex items-center gap-3">
+          <GlobalSearch currentUser={currentUser} onUpdate={onUpdate} />
           {onStartTour && (
             <button 
               onClick={onStartTour} 
@@ -122,8 +125,8 @@ const TopHeader: React.FC<{
                 </div>
                 <div className="max-h-[60vh] overflow-y-auto scrollbar-hide">
                   {notifications.length > 0 ? notifications.map(n => (
-                    <div key={n.id} className="p-5 border-b border-white/5 flex gap-4 hover:bg-white/5 transition-colors">
-                      <img src={n.senderAvatar} className="w-10 h-10 rounded-2xl object-cover shrink-0" />
+                     <div key={n.id} className="p-5 border-b border-white/5 flex gap-4 hover:bg-white/5 transition-colors">
+                      <img src={n.senderAvatar || null} className="w-10 h-10 rounded-2xl object-cover shrink-0" />
                       <div>
                         <p className="text-xs font-bold text-white leading-tight">{n.message}</p>
                         <span className="text-[8px] font-black uppercase text-zinc-600 mt-1.5 block">{n.timestamp}</span>
@@ -136,7 +139,7 @@ const TopHeader: React.FC<{
           </div>
           
           <NavLink to="/profile" className={`w-9 h-9 rounded-xl overflow-hidden border-2 transition-all ${currentUser.animatedAvatar ? 'avatar-animated border-emerald-500' : 'border-white/10'}`}>
-            <img src={currentUser.avatar} className="w-full h-full object-cover" />
+            <img src={currentUser.avatar || null} className="w-full h-full object-cover" />
           </NavLink>
         </div>
       </div>
@@ -154,15 +157,15 @@ const BottomNav: React.FC = () => {
         </NavLink>
         <NavLink to="/friends" className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-emerald-500 scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <UserPlus size={20} />
-          <span className="text-[6px] font-black uppercase tracking-widest">Aliados</span>
+          <span className="text-[6px] font-black uppercase tracking-widest">Amigos</span>
         </NavLink>
         <NavLink to="/communities" className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-emerald-500 scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <Users size={20} />
-          <span className="text-[6px] font-black uppercase tracking-widest">Tribo</span>
+          <span className="text-[6px] font-black uppercase tracking-widest">Páginas</span>
         </NavLink>
         <NavLink to="/universo" className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-emerald-500 scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <Tractor size={20} />
-          <span className="text-[6px] font-black uppercase tracking-widest">Roça</span>
+          <span className="text-[6px] font-black uppercase tracking-widest">Fazenda</span>
         </NavLink>
         <NavLink to="/mercado" className={({isActive}) => `flex flex-col items-center gap-1 transition-all ${isActive ? 'text-emerald-500 scale-110' : 'text-zinc-600 hover:text-zinc-400'}`}>
           <ShoppingBag size={20} />
@@ -379,6 +382,7 @@ const App: React.FC = () => {
           onStartTour={() => setIsTourOpen(true)} 
           currentTheme={theme}
           onToggleTheme={toggleTheme}
+          onUpdate={refreshUser}
         />
         <main className={`flex-grow pt-24 pb-24 px-4 overflow-x-hidden ${isIncognito ? 'incognito-blur' : ''}`}>
           <Routes>

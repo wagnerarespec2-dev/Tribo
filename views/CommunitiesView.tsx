@@ -208,7 +208,7 @@ const CommunitiesView: React.FC<CommunitiesViewProps> = ({ currentUser, syncTrig
             
             <div className="flex items-center gap-6 mb-8">
               <div className="w-20 h-20 bg-zinc-950 rounded-[2rem] flex items-center justify-center text-4xl border border-white/5 group-hover:scale-110 transition-transform duration-700 overflow-hidden shadow-2xl">
-                {comm.icon.length > 5 ? <img src={comm.icon} className="w-full h-full object-cover" /> : comm.icon}
+                {comm.icon.length > 5 ? <img src={comm.icon || null} className="w-full h-full object-cover" /> : comm.icon}
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ const CommunitiesView: React.FC<CommunitiesViewProps> = ({ currentUser, syncTrig
                   className={`group relative w-32 h-32 rounded-[2.5rem] border-4 border-dashed flex items-center justify-center cursor-pointer overflow-hidden transition-all ${formData.icon ? 'border-emerald-500 shadow-2xl shadow-emerald-500/10' : 'border-zinc-800 hover:border-emerald-500/40 bg-zinc-950'}`}
                 >
                   {formData.icon ? (
-                    <img src={formData.icon} className="w-full h-full object-cover" />
+                    <img src={formData.icon || null} className="w-full h-full object-cover" />
                   ) : (
                     <div className="flex flex-col items-center text-zinc-600">
                       <Camera size={32} />

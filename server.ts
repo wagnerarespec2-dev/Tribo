@@ -16,7 +16,7 @@ interface SyncState {
   sharedLocations: any[];
 }
 
-// Banco de dados central em memória (Relay de Internet da TRIBO)
+// Banco de dados central em memória (Relay de Internet do PÁGINAS)
 const centralDb: SyncState = {
   users: [],
   posts: [],
@@ -118,7 +118,7 @@ async function startServer() {
             if (userId) {
               authenticatedUserId = userId;
               connectedClients.set(userId, ws);
-              console.log(`[TRIBO INTERNET] Aparelho registrado para o Usuário: ${userId}`);
+              console.log(`[PÁGINAS INTERNET] Aparelho registrado para o Usuário: ${userId}`);
               
               // Confirmar registro
               ws.send(JSON.stringify({
@@ -142,7 +142,7 @@ async function startServer() {
               break;
             }
 
-            console.log(`[TRIBO INTERNET] Iniciando fusão de dados enviada por ${authenticatedUserId}`);
+            console.log(`[PÁGINAS INTERNET] Iniciando fusão de dados enviada por ${authenticatedUserId}`);
             
             const clientState: SyncState = payload;
 
@@ -175,7 +175,7 @@ async function startServer() {
             if (!authenticatedUserId) break;
 
             const { collection, item, action } = payload;
-            console.log(`[TRIBO MUTATION] ${authenticatedUserId} realizou ${action} na coleção ${collection}`);
+            console.log(`[PÁGINAS MUTATION] ${authenticatedUserId} realizou ${action} na coleção ${collection}`);
 
             const targetArray = (centralDb as any)[collection];
             if (targetArray) {
@@ -207,7 +207,7 @@ async function startServer() {
             if (!authenticatedUserId) break;
 
             const { recipientId, message, conversation } = payload;
-            console.log(`[TRIBO DM] Mensagem de ${authenticatedUserId} para ${recipientId}`);
+            console.log(`[PÁGINAS DM] Mensagem de ${authenticatedUserId} para ${recipientId}`);
 
             // Adicionar ao banco central
             const msgIdx = centralDb.messages.findIndex(m => m.id === message.id);
@@ -237,14 +237,14 @@ async function startServer() {
           }
         }
       } catch (err) {
-        console.error("[TRIBO WS ERROR] Falha ao processar mensagem:", err);
+        console.error("[PÁGINAS WS ERROR] Falha ao processar mensagem:", err);
       }
     });
 
     ws.on("close", () => {
       if (authenticatedUserId) {
         connectedClients.delete(authenticatedUserId);
-        console.log(`[TRIBO INTERNET] Aparelho desconectado: ${authenticatedUserId}`);
+        console.log(`[PÁGINAS INTERNET] Aparelho desconectado: ${authenticatedUserId}`);
         
         // Notificar outros sobre offline
         broadcastToOthers(authenticatedUserId, {
@@ -282,7 +282,7 @@ async function startServer() {
 
   // Escutar na porta 3000 e no host 0.0.0.0 (obrigatório para containers da nuvem)
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`[TRIBO INTERNET SERVER] Servidor central operando em http://0.0.0.0:${PORT}`);
+    console.log(`[PÁGINAS INTERNET SERVER] Servidor central operando em http://0.0.0.0:${PORT}`);
   });
 }
 

@@ -1,5 +1,5 @@
-// TRIBO - Service Worker de Notificações Soberanas
-const CACHE_NAME = 'tribo-cache-v1';
+// PÁGINAS - Service Worker de Notificações Soberanas
+const CACHE_NAME = 'paginas-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -21,10 +21,10 @@ self.addEventListener('activate', (event) => {
 // Manipulador do evento PUSH (Notificações Push Reais)
 self.addEventListener('push', (event) => {
   let data = {
-    title: 'TRIBO Soberana',
+    title: 'PÁGINAS Soberano',
     body: 'Você recebeu uma nova atualização descentralizada!',
-    icon: 'https://api.dicebear.com/7.x/avataaars/svg?seed=tribo',
-    badge: 'https://api.dicebear.com/7.x/avataaars/svg?seed=tribo-badge',
+    icon: 'https://api.dicebear.com/7.x/avataaars/svg?seed=paginas',
+    badge: 'https://api.dicebear.com/7.x/avataaars/svg?seed=paginas-badge',
     url: '/'
   };
 
@@ -45,10 +45,10 @@ self.addEventListener('push', (event) => {
       url: data.url || '/'
     },
     actions: [
-      { action: 'open', title: 'Abrir Tribo' },
+      { action: 'open', title: 'Abrir Páginas' },
       { action: 'close', title: 'Fechar' }
     ],
-    tag: 'tribo-push-notification',
+    tag: 'paginas-push-notification',
     renotify: true
   };
 
@@ -93,9 +93,9 @@ self.addEventListener('message', (event) => {
     // Agendar usando setTimeout no escopo do Service Worker que roda em segundo plano!
     setTimeout(() => {
       const options = {
-        body: data.body || 'Nova notificação da Tribo!',
-        icon: data.icon || 'https://api.dicebear.com/7.x/avataaars/svg?seed=tribo',
-        badge: 'https://api.dicebear.com/7.x/avataaars/svg?seed=tribo-badge',
+        body: data.body || 'Nova notificação das Páginas!',
+        icon: data.icon || 'https://api.dicebear.com/7.x/avataaars/svg?seed=paginas',
+        badge: 'https://api.dicebear.com/7.x/avataaars/svg?seed=paginas-badge',
         vibrate: [100, 50, 100],
         data: {
           url: data.url || '/'
@@ -103,11 +103,11 @@ self.addEventListener('message', (event) => {
         actions: [
           { action: 'open', title: 'Ver Agora' }
         ],
-        tag: 'tribo-scheduled-notification',
+        tag: 'paginas-scheduled-notification',
         renotify: true
       };
 
-      self.registration.showNotification(data.title || 'TRIBO Alerta', options);
+      self.registration.showNotification(data.title || 'PÁGINAS Alerta', options);
     }, delay);
   }
 });

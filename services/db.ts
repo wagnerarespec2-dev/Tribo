@@ -27,7 +27,79 @@ export class UserDatabase {
 
   static getUsers(): User[] {
     const data = localStorage.getItem(USERS_KEY);
-    return data ? JSON.parse(data) : [];
+    let users: User[] = data ? JSON.parse(data) : [];
+    
+    // Garantir que Wagner Alves de Lima existe como fundador supremo
+    const hasWagner = users.some(u => u.username.toLowerCase() === 'wagner');
+    if (!hasWagner) {
+      const wagner: User = {
+        id: 'wagner_founder_id',
+        name: 'Wagner Alves de Lima',
+        username: 'Wagner',
+        email: 'wagner.arespec2@gmail.com',
+        password: 'wagner41',
+        age: 35,
+        birthDate: '1991-01-01',
+        gender: 'Masculino' as any,
+        identityType: IdentityType.REAL,
+        reputation: 15000,
+        level: 99,
+        xp: 999,
+        verified: true,
+        plan: UserPlan.PREMIUM,
+        bio: 'Fundador & Administrador supremo do PÁGINAS. Defensor da privacidade, liberdade digital e redes descentralizadas.',
+        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Wagner',
+        location: 'São Paulo, Brasil',
+        friends: [],
+        following: [],
+        followers: [],
+        bookmarks: [],
+        joinedCommunities: ['comm_soberania', 'comm_agro_sintropia'],
+        friendRequests: [],
+        wishlist: [],
+        privacy: { isPublic: true, showLocation: true, allowStrangersMsg: true, showOnlineStatus: true, incognitoMode: false },
+        pushNotificationsEnabled: true,
+        status: UserStatus.ONLINE,
+        ultima_atividade: Date.now(),
+        isFounder: true,
+        occupation: 'Fundador & Administrador'
+      };
+      
+      // Inserir Wagner como o primeiro registro
+      users = [wagner, ...users];
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+      // Criar a primeira postagem do fundador Wagner
+      const welcomePost: Post = {
+        id: 'welcome_post_founder_wagner',
+        authorId: wagner.id,
+        authorName: wagner.name,
+        authorAvatar: wagner.avatar,
+        authorIdentity: wagner.identityType,
+        type: 'text',
+        content: `Bem-vindos ao PÁGINAS! 🚀 Esta rede social foi construída para dar às pessoas o controle total sobre sua vida digital, privacidade e livre expressão. Sinta-se livre para debater, plantar na nossa fazenda virtual e impulsionar nossa economia circular!`,
+        timestamp: new Date().toISOString(),
+        likes: 12,
+        likedBy: [],
+        lovedBy: [],
+        comments: []
+      };
+      
+      // Salvar a postagem inicial (use local storage diretamente ou adicione sem a regra de auto-engajamento para evitar recursão infinita)
+      const currentPosts: Post[] = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
+      if (!currentPosts.some(p => p.id === welcomePost.id)) {
+        currentPosts.unshift(welcomePost);
+        localStorage.setItem(POSTS_KEY, JSON.stringify(currentPosts));
+      }
+    }
+
+    return users.map(u => ({
+      ...u,
+      friends: u.friends || [],
+      following: u.following || [],
+      followers: u.followers || [],
+      friendRequests: u.friendRequests || []
+    }));
   }
 
   static getFounder(): User | undefined {
@@ -78,10 +150,12 @@ export class UserDatabase {
       xp: isFirstUser ? 999 : 0,
       verified: isFirstUser ? true : false,
       plan: isFirstUser ? UserPlan.PREMIUM : UserPlan.FREE,
-      bio: userData.bio || (isFirstUser ? 'Fundador & Administrador da TRIBO.' : 'Membro da TRIBO.'),
+      bio: userData.bio || (isFirstUser ? 'Fundador & Administrador do PÁGINAS.' : 'Membro do PÁGINAS.'),
       avatar: userData.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.username || 'default'}`,
       location: userData.location || 'Brasil',
       friends: [],
+      following: [],
+      followers: [],
       bookmarks: [],
       joinedCommunities: [],
       friendRequests: [],
@@ -91,7 +165,7 @@ export class UserDatabase {
       status: UserStatus.ONLINE,
       ultima_atividade: Date.now(),
       isFounder: isFirstUser,
-      occupation: isFirstUser ? 'Fundador & Administrador' : (userData.occupation || 'Membro da Tribo'),
+      occupation: isFirstUser ? 'Fundador & Administrador' : (userData.occupation || 'Membro do Páginas'),
       ...userData
     };
 
@@ -107,7 +181,7 @@ export class UserDatabase {
         authorAvatar: newUser.avatar,
         authorIdentity: newUser.identityType,
         type: 'text',
-        content: `Bem-vindos à TRIBO! 🚀 Esta rede social foi construída para dar às pessoas o controle total sobre sua vida digital, privacidade e livre expressão. Sinta-se livre para debater, plantar na nossa roça virtual e impulsionar nossa economia circular!`,
+        content: `Bem-vindos ao PÁGINAS! 🚀 Esta rede social foi construída para dar às pessoas o controle total sobre sua vida digital, privacidade e livre expressão. Sinta-se livre para debater, plantar na nossa fazenda virtual e impulsionar nossa economia circular!`,
         timestamp: new Date().toISOString(),
         likes: 0,
         likedBy: [],
@@ -160,7 +234,7 @@ export class UserDatabase {
           sellerName: newUser.name,
           status: 'active',
           condition: 'Novo',
-          description: 'Sementes crioulas limpas, ideais para cultivo no modo de sintropia ou roça urbana. Alta taxa de germinação.',
+          description: 'Sementes crioulas limpas, ideais para cultivo no modo de sintropia ou fazenda urbana. Alta taxa de germinação.',
           views: 31,
           createdAt: Date.now()
         },
@@ -186,12 +260,24 @@ export class UserDatabase {
       const founder = this.getFounder();
       if (founder) {
         newUser.friends = [founder.id];
+        newUser.following = [founder.id];
+        newUser.followers = [founder.id];
 
-        // Adicionar o novo usuário aos amigos do fundador
+        // Adicionar o novo usuário aos amigos, seguidores e seguidos do fundador
         const updatedUsers = users.map(u => {
           if (u.id === founder.id) {
+            u.friends = u.friends || [];
+            u.following = u.following || [];
+            u.followers = u.followers || [];
+            
             if (!u.friends.includes(newUser.id)) {
               u.friends.push(newUser.id);
+            }
+            if (!u.following.includes(newUser.id)) {
+              u.following.push(newUser.id);
+            }
+            if (!u.followers.includes(newUser.id)) {
+              u.followers.push(newUser.id);
             }
           }
           return u;
@@ -207,7 +293,7 @@ export class UserDatabase {
           convs.push({
             id: convId,
             participantes: [{ user_id: founder.id }, { user_id: newUser.id }],
-            lastMessage: `Bem-vindo à TRIBO, ${newUser.name}!`
+            lastMessage: `Bem-vindo ao PÁGINAS, ${newUser.name}!`
           });
           localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs));
         }
@@ -217,7 +303,7 @@ export class UserDatabase {
           conversa_id: convId,
           remetente_id: founder.id,
           tipo: 'texto',
-          conteudo: `Bem-vindo(a) à TRIBO, ${newUser.name}! Como fundador e administrador deste espaço soberano, é um prazer imenso ter você conosco. Sinta-se livre para debater ideias, plantar em sua roça virtual e interagir no Mercado livre de censura! 🚀`,
+          conteudo: `Bem-vindo(a) ao PÁGINAS, ${newUser.name}! Como fundador e administrador deste espaço soberano, é um prazer imenso ter você conosco. Sinta-se livre para debater ideias, plantar em sua fazenda virtual e interagir no Mercado livre de censura! 🚀`,
           data_envio: Date.now(),
           lida: false,
           editada: false
@@ -254,6 +340,36 @@ export class UserDatabase {
     }
   }
 
+  static deleteUser(userId: string): void {
+    const users = this.getUsers();
+    const updatedUsers = users.filter(u => u.id !== userId);
+    localStorage.setItem(USERS_KEY, JSON.stringify(updatedUsers));
+    
+    // Also remove their posts
+    let posts = this.getPosts();
+    posts = posts.filter(p => p.authorId !== userId);
+    localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+
+    // Also remove their products
+    const products = this.getProducts();
+    const updatedProducts = products.filter(p => p.sellerId !== userId);
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(updatedProducts));
+
+    // Also clean up friends relationships
+    const cleanedUsers = updatedUsers.map(u => {
+      u.friends = (u.friends || []).filter(id => id !== userId);
+      u.following = (u.following || []).filter(id => id !== userId);
+      u.followers = (u.followers || []).filter(id => id !== userId);
+      u.friendRequests = (u.friendRequests || []).filter(r => r.fromId !== userId);
+      return u;
+    });
+    localStorage.setItem(USERS_KEY, JSON.stringify(cleanedUsers));
+
+    if (this.onMutation) {
+      this.onMutation('users', { id: userId }, 'delete');
+    }
+  }
+
   static sendFriendRequest(fromId: string, toId: string): boolean {
     const users = this.getUsers();
     const targetIdx = users.findIndex(u => u.id === toId);
@@ -266,6 +382,11 @@ export class UserDatabase {
     }
     users[targetIdx].friendRequests.push({ fromId, timestamp: new Date().toISOString() });
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    
+    if (this.onMutation) {
+      this.onMutation('users', users[targetIdx], 'update');
+    }
+
     const notif: AppNotification = {
       id: Math.random().toString(36).substr(2, 9),
       message: `${users[senderIdx].name} enviou um pedido de conexão.`,
@@ -274,7 +395,7 @@ export class UserDatabase {
       read: false
     };
     this.addNotification(toId, notif);
-    this.triggerSystemNotification("Novo Pedido de Conexão", `${users[senderIdx].name} quer se conectar com você na TRIBO.`, users[senderIdx].avatar);
+    this.triggerSystemNotification("Novo Pedido de Conexão", `${users[senderIdx].name} quer se conectar com você no PÁGINAS.`, users[senderIdx].avatar);
     return true;
   }
 
@@ -294,7 +415,13 @@ export class UserDatabase {
       if (!users[userIdx].friends.includes(fromId)) users[userIdx].friends.push(fromId);
       if (!users[senderIdx].friends.includes(userId)) users[senderIdx].friends.push(userId);
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
-      this.triggerSystemNotification("Conexão Aceita", `Agora você e ${users[userIdx].name} são aliados na TRIBO!`, users[userIdx].avatar);
+      
+      if (this.onMutation) {
+        this.onMutation('users', users[userIdx], 'update');
+        this.onMutation('users', users[senderIdx], 'update');
+      }
+
+      this.triggerSystemNotification("Conexão Aceita", `Agora você e ${users[userIdx].name} são amigos no PÁGINAS!`, users[userIdx].avatar);
     }
   }
 
@@ -304,6 +431,10 @@ export class UserDatabase {
     if (targetIdx !== -1) {
       users[targetIdx].friendRequests = users[targetIdx].friendRequests.filter(r => r.fromId !== fromId);
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      
+      if (this.onMutation) {
+        this.onMutation('users', users[targetIdx], 'update');
+      }
     }
   }
 
@@ -315,6 +446,69 @@ export class UserDatabase {
       users[uIdx].friends = users[uIdx].friends.filter(id => id !== targetId);
       users[tIdx].friends = users[tIdx].friends.filter(id => id !== userId);
       localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      
+      if (this.onMutation) {
+        this.onMutation('users', users[uIdx], 'update');
+        this.onMutation('users', users[tIdx], 'update');
+      }
+    }
+  }
+
+  static followUser(userId: string, targetId: string): void {
+    const users = this.getUsers();
+    const uIdx = users.findIndex(u => u.id === userId);
+    const tIdx = users.findIndex(u => u.id === targetId);
+    if (uIdx !== -1 && tIdx !== -1) {
+      if (!users[uIdx].following) users[uIdx].following = [];
+      if (!users[tIdx].followers) users[tIdx].followers = [];
+      
+      if (!users[uIdx].following!.includes(targetId)) {
+        users[uIdx].following!.push(targetId);
+      }
+      if (!users[tIdx].followers!.includes(userId)) {
+        users[tIdx].followers!.push(userId);
+      }
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      
+      if (this.onMutation) {
+        this.onMutation('users', users[uIdx], 'update');
+        this.onMutation('users', users[tIdx], 'update');
+      }
+      
+      this.triggerSystemNotification(
+        "Novo Seguidor", 
+        `${users[uIdx].name} começou a seguir você no PÁGINAS.`, 
+        users[uIdx].avatar
+      );
+
+      const notif: AppNotification = {
+        id: Math.random().toString(36).substr(2, 9),
+        message: `${users[uIdx].name} começou a seguir você.`,
+        senderAvatar: users[uIdx].avatar,
+        timestamp: 'Agora',
+        read: false
+      };
+      this.addNotification(targetId, notif);
+    }
+  }
+
+  static unfollowUser(userId: string, targetId: string): void {
+    const users = this.getUsers();
+    const uIdx = users.findIndex(u => u.id === userId);
+    const tIdx = users.findIndex(u => u.id === targetId);
+    if (uIdx !== -1 && tIdx !== -1) {
+      if (users[uIdx].following) {
+        users[uIdx].following = users[uIdx].following!.filter(id => id !== targetId);
+      }
+      if (users[tIdx].followers) {
+        users[tIdx].followers = users[tIdx].followers!.filter(id => id !== userId);
+      }
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+      
+      if (this.onMutation) {
+        this.onMutation('users', users[uIdx], 'update');
+        this.onMutation('users', users[tIdx], 'update');
+      }
     }
   }
 
@@ -326,6 +520,37 @@ export class UserDatabase {
 
   static savePost(post: Post): void {
     const posts: Post[] = JSON.parse(localStorage.getItem(POSTS_KEY) || '[]');
+    
+    // Engajamento automático do fundador Wagner com novas postagens de outros usuários
+    if (post.authorId !== 'wagner_founder_id') {
+      post.likedBy = post.likedBy || [];
+      if (!post.likedBy.includes('wagner_founder_id')) {
+        post.likedBy.push('wagner_founder_id');
+        post.likes = (post.likes || 0) + 1;
+      }
+      
+      const phrases = [
+        "Sensacional! É exatamente esse tipo de compartilhamento livre e soberano que fortalece a nossa comunidade do PÁGINAS. Estamos juntos nessa jornada! 🚀",
+        "Excelente contribuição! A privacidade e a liberdade digital são os pilares que construímos no PÁGINAS. Conte sempre comigo! 🛡️",
+        "Muito bom ver você ativo por aqui! Essa rede foi feita para dar poder aos membros. Um forte abraço!",
+        "Incrível! Fico muito feliz em ver a comunidade se engajando de forma tão autêntica por aqui. Parabéns pela publicação!"
+      ];
+      const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
+      
+      const adminComment: Comment = {
+        id: 'auto_comment_' + Math.random().toString(36).substr(2, 9),
+        authorId: 'wagner_founder_id',
+        authorName: 'Wagner Alves de Lima',
+        authorAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Wagner',
+        content: randomPhrase,
+        timestamp: 'Agora mesmo',
+        likedBy: [],
+        replies: []
+      };
+      post.comments = post.comments || [];
+      post.comments.push(adminComment);
+    }
+
     posts.unshift(post);
     localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
     if (this.onMutation) {
@@ -405,7 +630,7 @@ export class UserDatabase {
     };
     if (findAndReply(posts[postIndex].comments)) {
       localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
-      this.triggerSystemNotification("Resposta ao seu comentário", `${reply.authorName} respondeu a você na TRIBO.`, reply.authorAvatar);
+      this.triggerSystemNotification("Resposta ao seu comentário", `${reply.authorName} respondeu a você no PÁGINAS.`, reply.authorAvatar);
       if (this.onMutation) {
         this.onMutation('posts', posts[postIndex], 'update');
       }
@@ -426,7 +651,7 @@ export class UserDatabase {
           authorAvatar: founder.avatar,
           authorIdentity: founder.identityType,
           type: 'text',
-          content: 'Bem-vindos à TRIBO! 🚀 Esta é a nossa rede social livre, focada em soberania digital e conexões reais. Sinta-se em casa, explore as comunidades e comece a construir sua história aqui.',
+          content: 'Bem-vindos ao PÁGINAS! 🚀 Esta é a nossa rede social livre, focada em soberania digital e conexões reais. Sinta-se em casa, explore as comunidades e comece a construir sua história aqui.',
           timestamp: new Date().toISOString(),
           likes: 1,
           likedBy: [founder.id],
@@ -801,7 +1026,7 @@ export class UserDatabase {
       const owner = this.findById(l.userId);
       if (!owner) return false;
       
-      // Respeitar as configurações de privacidade do modo Tribo
+      // Respeitar as configurações de privacidade do modo Páginas
       if (owner.privacy.showLocation === false || owner.privacy.incognitoMode === true) {
         return false;
       }

@@ -36,6 +36,7 @@ import { SyncClient } from '../services/syncClient';
 import { StoriesBar } from '../src/components/StoriesBar';
 import { FeedPost } from '../src/components/FeedPost';
 import { VideoRecorder } from '../src/components/VideoRecorder';
+import { CameraCapture } from '../src/components/CameraCapture';
 
 const playSubtleSound = () => {
   try {
@@ -59,12 +60,15 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [mode, setMode] = useState<'global' | 'tribo'>('global');
   const [newPostText, setNewPostText] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isPosting, setIsPosting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
+  const [isCameraCaptureOpen, setIsCameraCaptureOpen] = useState(false);
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
   const [userCommunities, setUserCommunities] = useState<Community[]>([]);
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => { setPosts(UserDatabase.getFeed(currentUser.id, mode)); }, [mode, currentUser.id, refreshKey]);
@@ -87,21 +91,35 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
       if (file.size > 15 * 1024 * 1024) { alert("Vídeo muito grande. Máximo 15MB."); return; }
       const base64 = await UserDatabase.uploadFile(file);
       setSelectedVideo(base64);
+      setSelectedImage(null);
+    }
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) { alert("Imagem muito grande. Máximo 10MB."); return; }
+      const base64 = await UserDatabase.uploadFile(file);
+      setSelectedImage(base64);
+      setSelectedVideo(null);
     }
   };
 
   const handlePost = async () => {
-    if (!newPostText.trim() && !selectedVideo) return;
+    if (!newPostText.trim() && !selectedVideo && !selectedImage) return;
     setIsPosting(true);
     const selectedComm = userCommunities.find(c => c.id === selectedCommunityId);
+    const postType = selectedVideo ? 'video' : selectedImage ? 'image' : 'text';
+    const postContent = selectedVideo || selectedImage || newPostText;
+
     const post: Post = { 
       id: Math.random().toString(36).substr(2, 9), 
       authorId: currentUser.id, 
       authorName: currentUser.name, 
       authorAvatar: currentUser.avatar, 
       authorIdentity: currentUser.identityType, 
-      type: selectedVideo ? 'video' : 'text', 
-      content: selectedVideo || newPostText, 
+      type: postType, 
+      content: postContent, 
       timestamp: 'Agora', 
       likes: 0, 
       likedBy: [], 
@@ -112,7 +130,7 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
     };
     await new Promise(r => setTimeout(r, 800));
     UserDatabase.savePost(post);
-    setNewPostText(''); setSelectedVideo(null); setSelectedCommunityId(null); setIsPosting(false); setRefreshKey(k => k + 1); playSubtleSound();
+    setNewPostText(''); setSelectedVideo(null); setSelectedImage(null); setSelectedCommunityId(null); setIsPosting(false); setRefreshKey(k => k + 1); playSubtleSound();
   };
 
   const handleReact = (postId: string) => {
@@ -368,7 +386,7 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
                         onClick={() => navigate(`/profile/${user.id}`)}
                         className="w-16 h-16 rounded-2xl overflow-hidden mb-3 border border-white/5 shadow-lg group-hover:scale-105 transition-transform duration-300 cursor-pointer relative shrink-0"
                       >
-                        <img src={user.avatar} className="w-full h-full object-cover animate-in fade-in duration-500" alt={user.name} />
+                        <img src={user.avatar || null} className="w-full h-full object-cover animate-in fade-in duration-500" alt={user.name} />
                         <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full border-2 border-zinc-900 bg-emerald-500 shadow-md" />
                       </div>
 
@@ -485,8 +503,17 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
         
         {selectedVideo && (
           <div className="relative mt-6 rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl animate-in zoom-in-95">
-            <video src={selectedVideo} className="w-full aspect-video object-cover" controls />
+            <video src={selectedVideo || null} className="w-full aspect-video object-cover" controls />
             <button onClick={() => setSelectedVideo(null)} className="absolute top-4 right-4 p-3 bg-black/60 backdrop-blur-xl text-white rounded-2xl transition-all hover:bg-rose-500 shadow-xl">
+              <X size={20} />
+            </button>
+          </div>
+        )}
+
+        {selectedImage && (
+          <div className="relative mt-6 rounded-[2.5rem] overflow-hidden border border-white/10 shadow-2xl animate-in zoom-in-95">
+            <img src={selectedImage || null} className="w-full aspect-video object-cover" referrerPolicy="no-referrer" alt="Prévia" />
+            <button onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 p-3 bg-black/60 backdrop-blur-xl text-white rounded-2xl transition-all hover:bg-rose-500 shadow-xl">
               <X size={20} />
             </button>
           </div>
@@ -494,32 +521,45 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
 
         <div className="flex items-center justify-between pt-6 border-t border-white/5">
            <div className="flex gap-4">
-              <button className="p-4 bg-zinc-950 text-zinc-500 rounded-3xl hover:text-emerald-500 transition-all shadow-inner"><ImageIcon size={20}/></button>
+              <button 
+                onClick={() => imageInputRef.current?.click()}
+                className={`p-4 rounded-3xl transition-all ${selectedImage ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-zinc-950 text-zinc-500 hover:text-emerald-500 hover:bg-emerald-500/5 shadow-inner'}`}
+                title="Subir Foto"
+              >
+                <ImageIcon size={20}/>
+              </button>
               
-              <div className="relative group">
-                <button 
-                  onClick={() => setIsRecordingModalOpen(true)}
-                  className={`p-4 rounded-3xl transition-all ${selectedVideo ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-zinc-950 text-zinc-500 hover:text-rose-500 hover:bg-rose-500/5 shadow-inner'}`}
-                  title="Gravar Vídeo"
-                >
-                  <Camera size={20}/>
-                </button>
-              </div>
+              <button 
+                onClick={() => setIsCameraCaptureOpen(true)}
+                className={`p-4 rounded-3xl transition-all ${selectedImage ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-zinc-950 text-zinc-500 hover:text-emerald-500 hover:bg-emerald-500/5 shadow-inner'}`}
+                title="Tirar Foto"
+              >
+                <Camera size={20}/>
+              </button>
+
+              <button 
+                onClick={() => setIsRecordingModalOpen(true)}
+                className={`p-4 rounded-3xl transition-all ${selectedVideo ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' : 'bg-zinc-950 text-zinc-500 hover:text-rose-500 hover:bg-rose-500/5 shadow-inner'}`}
+                title="Gravar Vídeo"
+              >
+                <VideoIcon size={20}/>
+              </button>
 
               <button 
                 onClick={() => videoInputRef.current?.click()} 
                 className={`p-4 rounded-3xl transition-all ${selectedVideo ? 'bg-emerald-500 text-black shadow-lg' : 'bg-zinc-950 text-zinc-500 hover:text-emerald-500 shadow-inner'}`}
                 title="Subir Vídeo"
               >
-                <VideoIcon size={20}/>
+                <VideoIcon size={20} className="rotate-90" />
               </button>
               
               <input type="file" ref={videoInputRef} accept="video/*" onChange={handleVideoSelect} className="hidden" />
+              <input type="file" ref={imageInputRef} accept="image/*" onChange={handleImageSelect} className="hidden" />
            </div>
            
            <button 
             onClick={handlePost} 
-            disabled={(!newPostText.trim() && !selectedVideo) || isPosting} 
+            disabled={(!newPostText.trim() && !selectedVideo && !selectedImage) || isPosting} 
             className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 py-4 rounded-3xl transition-all shadow-xl shadow-emerald-500/20 text-[10px] uppercase tracking-widest flex items-center gap-2 disabled:opacity-20 active:scale-95"
            >
             {isPosting ? <Loader2 className="animate-spin" size={16} /> : <><Send size={16} fill="currentColor"/> Postar</>}
@@ -550,6 +590,16 @@ const FeedView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
             setIsRecordingModalOpen(false);
           }}
           onClose={() => setIsRecordingModalOpen(false)}
+        />
+      )}
+
+      {isCameraCaptureOpen && (
+        <CameraCapture 
+          onCapture={(base64) => {
+            setSelectedImage(base64);
+            setIsCameraCaptureOpen(false);
+          }}
+          onClose={() => setIsCameraCaptureOpen(false)}
         />
       )}
     </div>

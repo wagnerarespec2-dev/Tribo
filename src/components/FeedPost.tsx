@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { Post, IdentityType, User, Comment } from '../../types';
 import { 
   X, 
@@ -79,7 +80,7 @@ export const CommentItem: React.FC<{
     <div className={`space-y-4 animate-in slide-in-from-left duration-300 ${depth > 0 ? 'ml-8 pl-4 border-l-2 border-white/5' : ''}`}>
       <div className="bg-zinc-950/40 p-5 rounded-[2rem] border border-white/5 flex gap-4">
         <img 
-          src={comment.authorAvatar} 
+          src={comment.authorAvatar || null} 
           onClick={() => navigate(`/profile/${comment.authorId}`)}
           className="w-10 h-10 rounded-xl object-cover cursor-pointer hover:scale-110 transition-transform" 
           alt="" 
@@ -117,12 +118,14 @@ export const CommentItem: React.FC<{
                 <Reply size={14} />
                 Responder
              </button>
-             {comment.authorId === currentUser.id && (
+             {(comment.authorId === currentUser.id || currentUser.isFounder || currentUser.username === 'Wagner' || currentUser.username === 'wagner') && (
                 <>
-                  <button onClick={() => setIsEditingComment(true)} className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-all">
-                    <Edit3 size={14} />
-                    Editar
-                  </button>
+                  {comment.authorId === currentUser.id && (
+                    <button onClick={() => setIsEditingComment(true)} className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-zinc-600 hover:text-white transition-all">
+                      <Edit3 size={14} />
+                      Editar
+                    </button>
+                  )}
                   <button onClick={handleDeleteComment} className="flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-rose-500/80 hover:text-rose-500 transition-all">
                     <Trash2 size={14} />
                     Excluir
@@ -169,6 +172,15 @@ export const FeedPost: React.FC<{
   const [editedPostText, setEditedPostText] = useState(post.content);
   const navigate = useNavigate();
   
+  const [likedJustNow, setLikedJustNow] = useState(false);
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!isLiked) {
+      handleLikeClick();
+    }
+  };
+  
   const [isVisible, setIsVisible] = useState(false);
   const domRef = useRef<HTMLDivElement>(null);
 
@@ -187,6 +199,13 @@ export const FeedPost: React.FC<{
   }, []);
 
   const isLiked = post.likedBy?.includes(currentUser.id);
+  const handleLikeClick = () => {
+    if (!isLiked) {
+      setLikedJustNow(true);
+      setTimeout(() => setLikedJustNow(false), 800);
+    }
+    onReact(post.id);
+  };
   const isBookmarked = currentUser.bookmarks?.includes(post.id);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -214,8 +233,8 @@ export const FeedPost: React.FC<{
 
   const handleShare = async () => {
     const shareData = {
-      title: `TRIBO - Post de ${post.authorName}`,
-      text: post.type === 'text' ? post.content : `Confira este rastro digital de ${post.authorName} na TRIBO.`,
+      title: `PÁGINAS - Post de ${post.authorName}`,
+      text: post.type === 'text' ? post.content : `Confira este rastro digital de ${post.authorName} no PÁGINAS.`,
       url: window.location.origin
     };
 
@@ -245,13 +264,26 @@ export const FeedPost: React.FC<{
       ref={domRef}
       className={`bg-zinc-900/40 border border-white/5 rounded-[3.5rem] p-8 space-y-6 shadow-2xl relative transition-all duration-700 ${isVisible ? `post-animation stagger-${(index % 5) + 1}` : 'opacity-0 translate-y-20 scale-95 blur-sm'}`}
     >
+      <AnimatePresence>
+        {likedJustNow && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.2 }}
+            animate={{ opacity: [0, 1, 1, 0], scale: [0.2, 1.3, 1.0, 1.8], y: [0, 0, 0, -40] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.8, times: [0, 0.2, 0.8, 1], ease: "easeInOut" }}
+            className="absolute inset-0 m-auto flex items-center justify-center pointer-events-none z-50 rounded-[3.5rem]"
+          >
+            <Heart size={100} fill="#f43f5e" className="text-rose-500 filter drop-shadow-[0_0_20px_rgba(244,63,94,0.8)]" />
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div 
             onClick={() => navigate(`/profile/${post.authorId}`)}
             className={`w-14 h-14 rounded-2xl overflow-hidden border-2 cursor-pointer transition-all duration-500 shadow-xl ${isLiked ? 'border-rose-500 scale-110 shadow-rose-500/20' : 'border-white/10'}`}
           >
-            <img src={post.authorAvatar} className="w-full h-full object-cover" alt="" />
+            <img src={post.authorAvatar || null} className="w-full h-full object-cover" alt="" />
           </div>
           <div onClick={() => navigate(`/profile/${post.authorId}`)} className="cursor-pointer">
             <div className="flex items-center gap-2">
@@ -338,21 +370,26 @@ export const FeedPost: React.FC<{
             </div>
           </form>
         ) : (
-          <>
+          <div onDoubleClick={handleDoubleClick} className="select-none cursor-pointer">
             {post.content && post.type === 'text' && <p className="text-zinc-200 text-lg font-medium leading-relaxed">{post.content}</p>}
             {post.type === 'video' && (
               <div className="relative rounded-[2.5rem] overflow-hidden border border-white/10 shadow-inner group">
-                <video src={post.content} className="w-full max-h-[500px] object-cover" controls playsInline />
+                <video src={post.content || null} className="w-full max-h-[500px] object-cover" controls playsInline />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors pointer-events-none" />
               </div>
             )}
-          </>
+            {post.type === 'image' && (
+              <div className="relative rounded-[2.5rem] overflow-hidden border border-white/10 shadow-inner">
+                <img src={post.content || null} className="w-full max-h-[500px] object-cover" referrerPolicy="no-referrer" alt="Publicação" />
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       <div className="flex items-center justify-between pt-6 border-t border-white/5 px-2">
          <div className="flex items-center gap-6">
-            <button onClick={() => onReact(post.id)} className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all active:scale-125 ${isLiked ? 'text-rose-500' : 'text-zinc-500 hover:text-white'}`}>
+            <button onClick={handleLikeClick} className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest transition-all active:scale-125 ${isLiked ? 'text-rose-500' : 'text-zinc-500 hover:text-white'}`}>
               <Heart 
                 size={22} 
                 fill={isLiked ? "currentColor" : "none"} 

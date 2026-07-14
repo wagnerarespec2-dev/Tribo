@@ -90,7 +90,7 @@ export const StoryViewer: React.FC<{
         {/* Renderizador de Imagem se for foto */}
         {story.mediaType === 'image' && story.mediaUrl && (
           <img 
-            src={story.mediaUrl} 
+            src={story.mediaUrl || null} 
             className="absolute inset-0 w-full h-full object-contain md:object-cover z-10" 
             alt="Status do usuário"
           />
@@ -103,7 +103,7 @@ export const StoryViewer: React.FC<{
             playsInline 
             loop 
             muted 
-            src={story.mediaUrl} 
+            src={story.mediaUrl || null} 
             className="absolute inset-0 w-full h-full object-contain md:object-cover z-10"
           />
         )}
@@ -131,7 +131,7 @@ export const StoryViewer: React.FC<{
             onClick={() => { onClose(); navigate(`/profile/${story.userId}`); }}
             className="flex items-center gap-3 cursor-pointer bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/5"
           >
-            <img src={story.userAvatar} className="w-9 h-9 rounded-xl border-2 border-emerald-500/30 object-cover" alt="" />
+            <img src={story.userAvatar || null} className="w-9 h-9 rounded-xl border-2 border-emerald-500/30 object-cover" alt="" />
             <div>
               <p className="font-black text-xs text-white tracking-tight">{story.userName}</p>
               <span className="text-[7px] font-black uppercase text-zinc-300 tracking-widest flex items-center gap-1 mt-0.5">
@@ -272,7 +272,7 @@ export const StoryCreator: React.FC<{
         {/* Renderização de Preview da Imagem Carregada */}
         {mediaType === 'image' && mediaUrl && (
           <img 
-            src={mediaUrl} 
+            src={mediaUrl || null} 
             className="absolute inset-0 w-full h-full object-contain md:object-cover opacity-80 z-10" 
             alt="Preview do status"
           />
@@ -285,7 +285,7 @@ export const StoryCreator: React.FC<{
             loop 
             muted 
             playsInline 
-            src={mediaUrl} 
+            src={mediaUrl || null} 
             className="absolute inset-0 w-full h-full object-contain md:object-cover opacity-80 z-10"
           />
         )}
@@ -459,7 +459,7 @@ export const StoriesBar: React.FC<{
         className="flex-none w-28 h-40 rounded-[2.5rem] bg-zinc-900 border border-white/5 relative overflow-hidden group cursor-pointer shadow-lg hover:border-emerald-500/20 transition-all"
       >
         <img 
-          src={currentUser.avatar} 
+          src={currentUser.avatar || null} 
           className="w-full h-full object-cover opacity-25 group-hover:scale-110 transition-transform duration-700" 
           alt="" 
         />
@@ -486,7 +486,7 @@ export const StoriesBar: React.FC<{
             {/* Se houver mídia (foto ou vídeo), exibe como miniatura de fundo */}
             {latest.mediaType === 'image' && latest.mediaUrl ? (
               <img 
-                src={latest.mediaUrl} 
+                src={latest.mediaUrl || null} 
                 className="absolute inset-0 w-full h-full object-cover opacity-60 z-10 transition-transform duration-700 hover:scale-105" 
                 alt="" 
               />
@@ -497,7 +497,7 @@ export const StoriesBar: React.FC<{
                   <VideoIcon size={10} />
                 </div>
                 <video 
-                  src={latest.mediaUrl} 
+                  src={latest.mediaUrl || null} 
                   muted 
                   playsInline 
                   className="w-full h-full object-cover"
@@ -510,7 +510,7 @@ export const StoriesBar: React.FC<{
             {/* Avatar do Autor */}
             <div className="absolute top-4 left-4 z-30">
               <img 
-                src={latest.userAvatar} 
+                src={latest.userAvatar || null} 
                 className={`w-9 h-9 rounded-xl border-2 object-cover ${isSelf ? 'border-white' : 'border-emerald-500'}`} 
                 alt="" 
               />

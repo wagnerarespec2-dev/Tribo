@@ -209,7 +209,7 @@ const UniversoView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
           <div className="absolute inset-0 bg-emerald-500/20 blur-[100px] animate-pulse"></div>
           <Tractor size={180} className="text-emerald-500 relative z-10 drop-shadow-[0_0_30px_rgba(16,185,129,0.4)]" />
         </div>
-        <h1 className="text-8xl font-black italic tracking-tighter text-white uppercase leading-none mb-6">ROÇA<br/><span className="text-emerald-500">SISTEMA 2026</span></h1>
+        <h1 className="text-8xl font-black italic tracking-tighter text-white uppercase leading-none mb-6">FAZENDA<br/><span className="text-emerald-500">SISTEMA 2026</span></h1>
         <p className="text-zinc-500 font-black uppercase tracking-[0.5em] text-[10px] mb-16">Terminal de Soberania Alimentar</p>
         <button 
           onClick={() => setIsLobby(false)}
@@ -229,7 +229,7 @@ const UniversoView: React.FC<{ currentUser: User }> = ({ currentUser }) => {
           <button onClick={() => setIsLobby(true)} className="p-5 bg-zinc-900 text-zinc-500 rounded-3xl hover:text-emerald-500 transition-all border border-white/5"><ChevronLeft size={24}/></button>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none">ROÇA <span className="text-emerald-500">TRIBO</span></h2>
+              <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none">FAZENDA <span className="text-emerald-500">PÁGINAS</span></h2>
               {gameState.level >= 70 && <div className="bg-amber-400 text-black px-4 py-1 rounded-full text-[8px] font-black uppercase flex items-center gap-2 animate-pulse"><Award size={12}/> Soberano Exportador</div>}
             </div>
             <div className="flex items-center gap-6 mt-4">
